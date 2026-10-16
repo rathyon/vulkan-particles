@@ -10,17 +10,17 @@
 #include <string_view>
 
 // Vulkan headers
-// #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+// For better autocompletion
+#define VK_USE_PLATFORM_WIN32_KHR
+#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.hpp>
 
-// todo consider defining VULKAN_HPP_NO_EXCEPTIONS to remove exception throwing by Vulkan-HPP
+// VMA - Vulkan Memory Allocator
+#include <vma/vk_mem_alloc.h>
 
-// // VMA
-// #include <vma/vk_mem_alloc.h>
-//
-// // SDL
-// #include <SDL3/SDL.h>
-// #include <SDL3/SDL_vulkan.h>
+// SDL for Windowing
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
 // GLM
 #define GLM_FORCE_RADIANS
