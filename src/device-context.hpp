@@ -32,6 +32,8 @@ namespace vkdemo {
         void               select_physical_device();
         [[nodiscard]] bool check_device_extension_support(const vk::PhysicalDevice &physical_device);
         void               create_logical_device();
+        void               select_queue_families();
+        [[nodiscard]] bool select_transfer_queue_family(const std::vector<vk::QueueFamilyProperties> &properties_list);
         void               read_physical_device_properties();
         void               create_swapchain(const Window &window);
         void               initialize_vma();
@@ -40,8 +42,15 @@ namespace vkdemo {
         vk::PhysicalDevice m_physical_device;
         vk::Device         m_device;
 
-        uint32_t  m_graphics_queue_family_index{};
+        uint32_t m_graphics_queue_family{};
+        uint32_t m_present_queue_family{};
+        uint32_t m_compute_queue_family{};
+        uint32_t m_dedicated_transfer_queue_family{};
+
         vk::Queue m_graphics_queue;
+        vk::Queue m_present_queue;
+        vk::Queue m_compute_queue;
+        vk::Queue m_dedicated_transfer_queue;
 
         vk::SurfaceKHR             m_surface;
         vk::SwapchainKHR           m_swapchain;

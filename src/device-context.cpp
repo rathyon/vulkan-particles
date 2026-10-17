@@ -96,10 +96,9 @@ namespace vkdemo {
 
     bool DeviceContext::check_layer_support() {
         m_layer_properties = vk::enumerateInstanceLayerProperties();
-        std::unordered_set<std::string> required_layers{kRequiredLayers.cbegin(),
-                                                        kRequiredLayers.cend()};
+        std::unordered_set<std::string> required_layers{kRequiredLayers.cbegin(), kRequiredLayers.cend()};
 
-        for (const auto& available_layer : m_layer_properties) {
+        for (const auto &available_layer: m_layer_properties) {
             required_layers.erase(available_layer.layerName);
         }
 
@@ -141,7 +140,7 @@ namespace vkdemo {
         uint32_t queue_family_index = 0;
         for (const auto &family_properties: queue_families_properties) {
             if (family_properties.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                m_graphics_queue_family_index = queue_family_index;
+                m_graphics_queue_family = queue_family_index;
                 break;
             }
 
@@ -149,22 +148,103 @@ namespace vkdemo {
         }
     }
 
-    bool DeviceContext::check_device_extension_support(const vk::PhysicalDevice& physical_device) {
+    bool DeviceContext::check_device_extension_support(const vk::PhysicalDevice &physical_device) {
         m_device_extensions = physical_device.enumerateDeviceExtensionProperties();
-        std::unordered_set<std::string> required_extensions{kRequiredDeviceExtensions.cbegin(),
-                                                            kRequiredDeviceExtensions.cend()};
+        std::unordered_set<std::string> required_extensions{kRequiredDeviceExtensions.cbegin(), kRequiredDeviceExtensions.cend()};
 
         // Erase required extensions from the set as they appear. If the set is empty at the end, all required extensions have been found.
-        for (const auto& available_extension : m_device_extensions) {
+        for (const auto &available_extension: m_device_extensions) {
             required_extensions.erase(available_extension.extensionName);
         }
 
         return required_extensions.empty();
     }
 
+    void DeviceContext::select_queue_families() {
+        const std::vector<vk::QueueFamilyProperties> properties_list = m_physical_device.getQueueFamilyProperties();
+
+        // Initialize family indices with total count to compare if it was found
+        m_graphics_queue_family = m_present_queue_family = properties_list.size();
+
+        // Select graphics queue family
+        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
+            const vk::QueueFamilyProperties properties = *property_it;
+
+            // Select the first one that has the Graphics and Compute flags
+            if (properties.queueCount > 0 && properties.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute)) {
+                m_graphics_queue_family = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                m_compute_queue_family  = m_graphics_queue_family;
+                break;
+            }
+        }
+
+        // Select present queue family
+        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
+            const vk::QueueFamilyProperties properties = *property_it;
+
+            const uint32_t   family_index    = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+            const vk::Bool32 present_support = SDL_Vulkan_GetPresentationSupport(m_instance, m_physical_device, family_index);
+            if (properties.queueCount > 0 && present_support) {
+                m_present_queue_family = family_index;
+                break;
+            }
+        }
+
+        // Check if families were found
+        check(m_graphics_queue_family < properties_list.size(), "Failed to find Graphics queue family.");
+        check(m_compute_queue_family < properties_list.size(), "Failed to find Compute queue family.");
+        check(m_present_queue_family < properties_list.size(), "Failed to find Present queue family.");
+
+        // Select optimal transfer queue if it exists.
+        // Transfer queue does not need to be checked, because it is guaranteed to exist if a graphics queue exists, as per the spec.
+        if (select_transfer_queue_family(properties_list) == false) {
+            m_dedicated_transfer_queue_family = m_graphics_queue_family;
+        }
+
+        std::cout << "Selected queue families:\n"
+                  << "Graphics: " << m_graphics_queue_family << "\nCompute: " << m_compute_queue_family << "\nPresent: " << m_present_queue_family
+                  << "\nDedicated Transfer: " << m_dedicated_transfer_queue_family << std::endl;
+    }
+
+    bool DeviceContext::select_transfer_queue_family(const std::vector<vk::QueueFamilyProperties> &properties_list) {
+        // Find a Transfer queue. We try from best case to worst and by the one with the least amount of queues.
+        // Best case: If it supports Transfer but not Graphics and Compute
+        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
+            const vk::QueueFamilyProperties properties = *property_it;
+
+            if (properties.queueCount > 0 && properties.queueFlags & vk::QueueFlagBits::eTransfer && static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eGraphics) == false &&
+                static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eCompute) == false) {
+                m_dedicated_transfer_queue_family = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                return true;
+            }
+        }
+
+        // Second-best case: If it supports Transfer but not Graphics
+        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
+            const vk::QueueFamilyProperties properties = *property_it;
+
+            if (properties.queueCount > 0 && properties.queueFlags & vk::QueueFlagBits::eTransfer && static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eGraphics) == false) {
+                m_dedicated_transfer_queue_family = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     void DeviceContext::create_logical_device() {
-        const std::vector         queue_priorities{1.0f};
-        vk::DeviceQueueCreateInfo graphics_queue_create_info{{}, m_graphics_queue_family_index, queue_priorities};
+        select_queue_families();
+
+        // Create a set of unique family indices (duplicates are discarded)
+        const std::unordered_set unique_queue_families{m_graphics_queue_family, m_present_queue_family, m_compute_queue_family, m_dedicated_transfer_queue_family};
+        const std::vector         all_queue_priority{1.0f};
+
+        std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
+        for (const auto& cur_family : unique_queue_families) {
+            // Create with no flags, with 1 queue and priority = 1.0f
+            vk::DeviceQueueCreateInfo create_info{{}, cur_family, all_queue_priority};
+            queue_create_infos.emplace_back(create_info);
+        }
 
         // Enable desired vulkan features
         vk::PhysicalDeviceHostImageCopyFeatures host_image_copy_features{};
@@ -181,7 +261,7 @@ namespace vkdemo {
         enabled_vk12_features.runtimeDescriptorArray                    = true;
         enabled_vk12_features.descriptorBindingVariableDescriptorCount  = true;
         enabled_vk12_features.bufferDeviceAddress                       = true;
-        enabled_vk12_features.scalarBlockLayout = true;
+        enabled_vk12_features.scalarBlockLayout                         = true;
         enabled_vk12_features.pNext                                     = &enabled_vk13_features;
 
         vk::PhysicalDeviceFeatures2 enabled_features{};
@@ -189,12 +269,12 @@ namespace vkdemo {
         enabled_features.pNext                      = &enabled_vk12_features;
 
         vk::DeviceCreateInfo device_create_info{};
-        device_create_info.setQueueCreateInfos({graphics_queue_create_info});
+        device_create_info.setQueueCreateInfos(queue_create_infos);
         device_create_info.setPEnabledExtensionNames(kRequiredDeviceExtensions);
         device_create_info.pNext = enabled_features;
 
-        m_device = m_physical_device.createDevice(device_create_info);
-        m_graphics_queue = m_device.getQueue2(vk::DeviceQueueInfo2{{}, m_graphics_queue_family_index});
+        m_device         = m_physical_device.createDevice(device_create_info);
+        m_graphics_queue = m_device.getQueue2(vk::DeviceQueueInfo2{{}, m_graphics_queue_family});
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_device);
     }
@@ -228,7 +308,7 @@ namespace vkdemo {
         check(window.CreateSurface(m_instance, m_surface), "Failed to create VkSurfaceKHR from window.");
 
         vk::SurfaceCapabilitiesKHR surface_capabilities = m_physical_device.getSurfaceCapabilitiesKHR({m_surface});
-        vk::SwapchainCreateInfoKHR  swapchain_create_info{};
+        vk::SwapchainCreateInfoKHR swapchain_create_info{};
         swapchain_create_info.surface          = m_surface;
         swapchain_create_info.minImageCount    = surface_capabilities.minImageCount;
         swapchain_create_info.imageFormat      = kSwapchainFormat;
