@@ -35,17 +35,17 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_utils_messenger_callback(vk::DebugUtilsMe
 
 namespace vkdemo {
     DeviceContext::~DeviceContext() {
-        for (const auto &view: m_swapchain_image_views) {
-            m_device.destroyImageView(view);
+        for (const auto &view: SwapchainImageViews) {
+            Device.destroyImageView(view);
         }
-        m_swapchain_image_views.clear();
+        SwapchainImageViews.clear();
 
-        m_device.destroySwapchainKHR(m_swapchain);
-        SDL_Vulkan_DestroySurface(m_instance, m_surface, nullptr);
-        vmaDestroyAllocator(m_vma_allocator);
-        m_instance.destroyDebugUtilsMessengerEXT(m_debug_utils_messenger, nullptr);
-        m_device.destroy();
-        m_instance.destroy();
+        Device.destroySwapchainKHR(Swapchain);
+        SDL_Vulkan_DestroySurface(Instance, Surface, nullptr);
+        vmaDestroyAllocator(VmaAllocator);
+        Instance.destroyDebugUtilsMessengerEXT(m_debug_utils_messenger, nullptr);
+        Device.destroy();
+        Instance.destroy();
     }
 
     void DeviceContext::Initialize(const Window &window) {
@@ -88,10 +88,10 @@ namespace vkdemo {
 
         instance_create_info.pNext = &messenger_create_info;
 
-        m_instance = vk::createInstance(instance_create_info);
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance);
+        Instance = vk::createInstance(instance_create_info);
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(Instance);
 
-        m_debug_utils_messenger = m_instance.createDebugUtilsMessengerEXT(messenger_create_info);
+        m_debug_utils_messenger = Instance.createDebugUtilsMessengerEXT(messenger_create_info);
     }
 
     bool DeviceContext::check_layer_support() {
@@ -106,7 +106,7 @@ namespace vkdemo {
     }
 
     void DeviceContext::select_physical_device() {
-        const std::vector<vk::PhysicalDevice> physical_devices = m_instance.enumeratePhysicalDevices();
+        const std::vector<vk::PhysicalDevice> physical_devices = Instance.enumeratePhysicalDevices();
 
         // List available GPUs
         if constexpr (globals::kPrintDeviceCapabilities) {
@@ -119,13 +119,13 @@ namespace vkdemo {
 
         // Select the first one: my PC only has 1 GPU
         check(check_device_extension_support(physical_devices[0]), "Required device extensions not present!");
-        m_physical_device = physical_devices[0];
+        PhysicalDevice = physical_devices[0];
         read_physical_device_properties();
 
         std::cout << "Selected device: " << m_physical_device_properties.properties.deviceName << "\n";
 
         // Find required queue families
-        std::vector<vk::QueueFamilyProperties2> queue_families_properties = m_physical_device.getQueueFamilyProperties2();
+        std::vector<vk::QueueFamilyProperties2> queue_families_properties = PhysicalDevice.getQueueFamilyProperties2();
 
         // List queue families
         if constexpr (globals::kPrintDeviceCapabilities) {
@@ -140,7 +140,7 @@ namespace vkdemo {
         uint32_t queue_family_index = 0;
         for (const auto &family_properties: queue_families_properties) {
             if (family_properties.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                m_graphics_queue_family = queue_family_index;
+                GraphicsQueueFamily = queue_family_index;
                 break;
             }
 
@@ -161,10 +161,10 @@ namespace vkdemo {
     }
 
     void DeviceContext::select_queue_families() {
-        const std::vector<vk::QueueFamilyProperties> properties_list = m_physical_device.getQueueFamilyProperties();
+        const std::vector<vk::QueueFamilyProperties> properties_list = PhysicalDevice.getQueueFamilyProperties();
 
         // Initialize family indices with total count to compare if it was found
-        m_graphics_queue_family = m_present_queue_family = properties_list.size();
+        GraphicsQueueFamily = PresentQueueFamily = properties_list.size();
 
         // Select graphics queue family
         for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
@@ -172,8 +172,8 @@ namespace vkdemo {
 
             // Select the first one that has the Graphics and Compute flags
             if (properties.queueCount > 0 && properties.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute)) {
-                m_graphics_queue_family = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
-                m_compute_queue_family  = m_graphics_queue_family;
+                GraphicsQueueFamily = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                ComputeQueueFamily  = GraphicsQueueFamily;
                 break;
             }
         }
@@ -183,27 +183,27 @@ namespace vkdemo {
             const vk::QueueFamilyProperties properties = *property_it;
 
             const uint32_t   family_index    = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
-            const vk::Bool32 present_support = SDL_Vulkan_GetPresentationSupport(m_instance, m_physical_device, family_index);
+            const vk::Bool32 present_support = SDL_Vulkan_GetPresentationSupport(Instance, PhysicalDevice, family_index);
             if (properties.queueCount > 0 && present_support) {
-                m_present_queue_family = family_index;
+                PresentQueueFamily = family_index;
                 break;
             }
         }
 
         // Check if families were found
-        check(m_graphics_queue_family < properties_list.size(), "Failed to find Graphics queue family.");
-        check(m_compute_queue_family < properties_list.size(), "Failed to find Compute queue family.");
-        check(m_present_queue_family < properties_list.size(), "Failed to find Present queue family.");
+        check(GraphicsQueueFamily < properties_list.size(), "Failed to find Graphics queue family.");
+        check(ComputeQueueFamily < properties_list.size(), "Failed to find Compute queue family.");
+        check(PresentQueueFamily < properties_list.size(), "Failed to find Present queue family.");
 
         // Select optimal transfer queue if it exists.
         // Transfer queue does not need to be checked, because it is guaranteed to exist if a graphics queue exists, as per the spec.
         if (select_transfer_queue_family(properties_list) == false) {
-            m_dedicated_transfer_queue_family = m_graphics_queue_family;
+            DedicatedTransferQueueFamily = GraphicsQueueFamily;
         }
 
         std::cout << "Selected queue families:\n"
-                  << "Graphics: " << m_graphics_queue_family << "\nCompute: " << m_compute_queue_family << "\nPresent: " << m_present_queue_family
-                  << "\nDedicated Transfer: " << m_dedicated_transfer_queue_family << std::endl;
+                  << "Graphics: " << GraphicsQueueFamily << "\nCompute: " << ComputeQueueFamily << "\nPresent: " << PresentQueueFamily
+                  << "\nDedicated Transfer: " << DedicatedTransferQueueFamily << std::endl;
     }
 
     bool DeviceContext::select_transfer_queue_family(const std::vector<vk::QueueFamilyProperties> &properties_list) {
@@ -214,7 +214,7 @@ namespace vkdemo {
 
             if (properties.queueCount > 0 && properties.queueFlags & vk::QueueFlagBits::eTransfer && static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eGraphics) == false &&
                 static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eCompute) == false) {
-                m_dedicated_transfer_queue_family = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                DedicatedTransferQueueFamily = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
                 return true;
             }
         }
@@ -224,7 +224,7 @@ namespace vkdemo {
             const vk::QueueFamilyProperties properties = *property_it;
 
             if (properties.queueCount > 0 && properties.queueFlags & vk::QueueFlagBits::eTransfer && static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eGraphics) == false) {
-                m_dedicated_transfer_queue_family = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                DedicatedTransferQueueFamily = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
                 return true;
             }
         }
@@ -236,7 +236,7 @@ namespace vkdemo {
         select_queue_families();
 
         // Create a set of unique family indices (duplicates are discarded)
-        const std::unordered_set unique_queue_families{m_graphics_queue_family, m_present_queue_family, m_compute_queue_family, m_dedicated_transfer_queue_family};
+        const std::unordered_set unique_queue_families{GraphicsQueueFamily, PresentQueueFamily, ComputeQueueFamily, DedicatedTransferQueueFamily};
         const std::vector         all_queue_priority{1.0f};
 
         std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
@@ -273,17 +273,17 @@ namespace vkdemo {
         device_create_info.setPEnabledExtensionNames(kRequiredDeviceExtensions);
         device_create_info.pNext = enabled_features;
 
-        m_device         = m_physical_device.createDevice(device_create_info);
-        m_graphics_queue = m_device.getQueue2(vk::DeviceQueueInfo2{{}, m_graphics_queue_family});
+        Device         = PhysicalDevice.createDevice(device_create_info);
+        GraphicsQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, GraphicsQueueFamily});
 
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(m_device);
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(Device);
     }
 
     void DeviceContext::read_physical_device_properties() {
-        m_physical_device_properties = m_physical_device.getProperties2();
+        m_physical_device_properties = PhysicalDevice.getProperties2();
 
         m_physical_device_memory_properties.pNext = &m_physical_device_memory_budget_properties;
-        m_physical_device.getMemoryProperties2(&m_physical_device_memory_properties);
+        PhysicalDevice.getMemoryProperties2(&m_physical_device_memory_properties);
 
         if constexpr (globals::kPrintDeviceMemoryProperties) {
             const auto &properties = m_physical_device_memory_properties.memoryProperties;
@@ -305,11 +305,11 @@ namespace vkdemo {
     }
 
     void DeviceContext::create_swapchain(const Window &window) {
-        check(window.CreateSurface(m_instance, m_surface), "Failed to create VkSurfaceKHR from window.");
+        check(window.CreateSurface(Instance, Surface), "Failed to create VkSurfaceKHR from window.");
 
-        vk::SurfaceCapabilitiesKHR surface_capabilities = m_physical_device.getSurfaceCapabilitiesKHR({m_surface});
+        vk::SurfaceCapabilitiesKHR surface_capabilities = PhysicalDevice.getSurfaceCapabilitiesKHR({Surface});
         vk::SwapchainCreateInfoKHR swapchain_create_info{};
-        swapchain_create_info.surface          = m_surface;
+        swapchain_create_info.surface          = Surface;
         swapchain_create_info.minImageCount    = surface_capabilities.minImageCount;
         swapchain_create_info.imageFormat      = kSwapchainFormat;
         swapchain_create_info.imageColorSpace  = kSwapchainColorSpace;
@@ -325,17 +325,17 @@ namespace vkdemo {
             swapchain_create_info.presentMode = vk::PresentModeKHR::eImmediate; // Uncapped framerate, screen tearing
         }
 
-        m_swapchain        = m_device.createSwapchainKHR(swapchain_create_info);
-        m_swapchain_images = m_device.getSwapchainImagesKHR(m_swapchain);
+        Swapchain        = Device.createSwapchainKHR(swapchain_create_info);
+        SwapchainImages = Device.getSwapchainImagesKHR(Swapchain);
 
         vk::ImageViewCreateInfo image_view_create_info{};
         image_view_create_info.viewType         = vk::ImageViewType::e2D;
         image_view_create_info.format           = kSwapchainFormat;
         image_view_create_info.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
-        for (const auto &swapchain_image: m_swapchain_images) {
+        for (const auto &swapchain_image: SwapchainImages) {
             image_view_create_info.image = swapchain_image;
-            m_swapchain_image_views.emplace_back(m_device.createImageView(image_view_create_info));
+            SwapchainImageViews.emplace_back(Device.createImageView(image_view_create_info));
         }
     }
 
@@ -348,15 +348,15 @@ namespace vkdemo {
         vulkan_functions.vkGetDeviceProcAddr   = dispatcher.vkGetDeviceProcAddr;
 
         VmaAllocatorCreateInfo allocator_create_info{};
-        allocator_create_info.instance         = m_instance;
-        allocator_create_info.physicalDevice   = m_physical_device;
-        allocator_create_info.device           = m_device;
+        allocator_create_info.instance         = Instance;
+        allocator_create_info.physicalDevice   = PhysicalDevice;
+        allocator_create_info.device           = Device;
         allocator_create_info.vulkanApiVersion = kVulkanAPIVersion;
         allocator_create_info.pVulkanFunctions = &vulkan_functions;
 
         // Buffer Device Address and Memory Budget extensions are used, they need to be declared to VMA
         allocator_create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT | VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
 
-        vmaCreateAllocator(&allocator_create_info, &m_vma_allocator);
+        vmaCreateAllocator(&allocator_create_info, &VmaAllocator);
     }
 } // namespace vkdemo

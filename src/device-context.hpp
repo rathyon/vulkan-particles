@@ -17,6 +17,27 @@ namespace vkdemo {
 
         void Initialize(const Window &window);
 
+        vk::Instance       Instance;
+        vk::PhysicalDevice PhysicalDevice;
+        vk::Device         Device;
+
+        uint32_t GraphicsQueueFamily{};
+        uint32_t PresentQueueFamily{};
+        uint32_t ComputeQueueFamily{};
+        uint32_t DedicatedTransferQueueFamily{};
+
+        vk::Queue GraphicsQueue;
+        vk::Queue PresentQueue;
+        vk::Queue ComputeQueue;
+        vk::Queue DedicatedTransferQueue;
+
+        vk::SurfaceKHR             Surface;
+        vk::SwapchainKHR           Swapchain;
+        std::vector<vk::Image>     SwapchainImages{};
+        std::vector<vk::ImageView> SwapchainImageViews{};
+
+        VmaAllocator VmaAllocator{nullptr};
+
     private:
         static constexpr uint32_t          kVulkanAPIVersion    = vk::ApiVersion14;
         static constexpr vk::Format        kSwapchainFormat     = vk::Format::eB8G8R8A8Srgb;
@@ -37,27 +58,6 @@ namespace vkdemo {
         void               read_physical_device_properties();
         void               create_swapchain(const Window &window);
         void               initialize_vma();
-
-        vk::Instance       m_instance;
-        vk::PhysicalDevice m_physical_device;
-        vk::Device         m_device;
-
-        uint32_t m_graphics_queue_family{};
-        uint32_t m_present_queue_family{};
-        uint32_t m_compute_queue_family{};
-        uint32_t m_dedicated_transfer_queue_family{};
-
-        vk::Queue m_graphics_queue;
-        vk::Queue m_present_queue;
-        vk::Queue m_compute_queue;
-        vk::Queue m_dedicated_transfer_queue;
-
-        vk::SurfaceKHR             m_surface;
-        vk::SwapchainKHR           m_swapchain;
-        std::vector<vk::Image>     m_swapchain_images{};
-        std::vector<vk::ImageView> m_swapchain_image_views{};
-
-        VmaAllocator m_vma_allocator{nullptr};
 
         std::vector<vk::LayerProperties>     m_layer_properties;
         std::vector<vk::ExtensionProperties> m_device_extensions;
