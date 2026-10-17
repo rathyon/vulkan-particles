@@ -16,8 +16,9 @@ namespace vkdemo {
             m_device.destroyImageView(view);
         }
         m_swapchain_image_views.clear();
-        
+
         m_device.destroySwapchainKHR(m_swapchain);
+        vmaDestroyAllocator(m_vma_allocator);
         m_device.destroy();
         m_instance.destroy();
     }
@@ -162,6 +163,16 @@ namespace vkdemo {
     }
 
     void DeviceContext::initialize_vma() {
-        // todo
+        VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+        VmaAllocatorCreateInfo allocator_create_info{};
+        allocator_create_info.instance = m_instance;
+        allocator_create_info.physicalDevice = m_physical_device;
+        allocator_create_info.device = m_device;
+        allocator_create_info.vulkanApiVersion = kVulkanAPIVersion;
+
+        vmaCreateAllocator(&allocator_create_info, &m_vma_allocator);
     }
 } // namespace vkdemo

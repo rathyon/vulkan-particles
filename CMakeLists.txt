@@ -17,7 +17,9 @@ add_executable(vulkan_particles
         src/window.hpp
         src/utils.hpp
         src/globals.hpp
-        src/math.hpp
+        src/glm-usage.hpp
+        src/vma-usage.cpp
+        src/vma-usage.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

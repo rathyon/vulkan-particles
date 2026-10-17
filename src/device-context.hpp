@@ -1,10 +1,12 @@
-#ifndef VULKAN_PARTICLES_DEVICE_CONTEXT_HPP
-#define VULKAN_PARTICLES_DEVICE_CONTEXT_HPP
+#ifndef DEVICE_CONTEXT_HPP
+#define DEVICE_CONTEXT_HPP
 
 // For better autocompletion (recommendation by Khronos)
 #define VK_USE_PLATFORM_WIN32_KHR
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.hpp>
+
+#include "vma-usage.hpp"
 
 namespace vkdemo {
     class Window;
@@ -40,9 +42,8 @@ namespace vkdemo {
         vk::SwapchainKHR              m_swapchain;
         std::vector<vk::Image>        m_swapchain_images{};
         std::vector<vk::ImageView>    m_swapchain_image_views{};
-
-        // VmaAllocator m_vma_allocator;
+        VmaAllocator                  m_vma_allocator;
     };
 } // namespace vkdemo
 
-#endif // VULKAN_PARTICLES_DEVICE_CONTEXT_HPP
+#endif // DEVICE_CONTEXT_HPP

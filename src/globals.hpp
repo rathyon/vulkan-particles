@@ -1,5 +1,5 @@
-#ifndef VULKAN_PARTICLES_GLOBALS_HPP
-#define VULKAN_PARTICLES_GLOBALS_HPP
+#ifndef GLOBALS_HPP
+#define GLOBALS_HPP
 
 #include <string_view>
 
@@ -9,4 +9,4 @@ namespace vkdemo::globals {
     static constexpr bool             kVSyncEnabled{false};
 } // namespace vkdemo::globals
 
-#endif // VULKAN_PARTICLES_GLOBALS_HPP
+#endif // GLOBALS_HPP

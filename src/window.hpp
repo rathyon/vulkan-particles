@@ -1,10 +1,9 @@
-#ifndef VULKAN_PARTICLES_WINDOW_HPP
-#define VULKAN_PARTICLES_WINDOW_HPP
-
-#include "math.hpp"
+#ifndef WINDOW_HPP
+#define WINDOW_HPP
 
 #include <SDL3/SDL.h>
 #include <vulkan/vulkan.hpp>
+#include "glm-usage.hpp"
 
 namespace vkdemo {
     class Window {
@@ -22,4 +21,4 @@ namespace vkdemo {
 
 } // namespace vkdemo
 
-#endif // VULKAN_PARTICLES_WINDOW_HPP
+#endif // WINDOW_HPP

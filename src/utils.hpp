@@ -1,5 +1,5 @@
-#ifndef VULKAN_PARTICLES_UTILS_HPP
-#define VULKAN_PARTICLES_UTILS_HPP
+#ifndef UTILS_HPP
+#define UTILS_HPP
 
 namespace vkdemo {
     static void check(const bool result, const std::string_view message = "") {
@@ -15,4 +15,4 @@ namespace vkdemo {
     }
 }
 
-#endif // VULKAN_PARTICLES_UTILS_HPP
+#endif // UTILS_HPP
