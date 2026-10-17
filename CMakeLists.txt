@@ -23,10 +23,27 @@ add_executable(vulkan_particles
         src/vma-usage.hpp
         src/renderer-context.cpp
         src/renderer-context.hpp
+        src/shader-library.cpp
+        src/shader-library.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})
 target_link_libraries(vulkan_particles PRIVATE ${SDL_LIBRARY})
+target_link_libraries(vulkan_particles PRIVATE ${Slang_LIBRARY})
 
 # In case I want to use PCH
 #target_precompile_headers(vulkan_particles PRIVATE src/pch.hpp)
+
+# Delete shaders folder before copying it below
+add_custom_command(
+        TARGET vulkan_particles
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E
+        rm -r -f $<TARGET_FILE_DIR:vulkan_particles>/shaders/)
+
+# Copy shaders folder into directory of executable
+add_custom_command(
+        TARGET vulkan_particles
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E
+        copy_directory ${CMAKE_SOURCE_DIR}/src/shaders/ $<TARGET_FILE_DIR:vulkan_particles>/shaders/)

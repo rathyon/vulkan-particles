@@ -2,7 +2,6 @@
 #define GLOBALS_HPP
 
 #include <string_view>
-#include <array>
 #include <glm/vec2.hpp>
 
 namespace vkdemo::globals {

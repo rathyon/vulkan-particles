@@ -1,6 +1,8 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
+#include "globals.hpp"
+
 #include <iostream>
 #include <vulkan/vulkan.hpp>
 
