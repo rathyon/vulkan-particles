@@ -1,5 +1,6 @@
 #include "device-context.hpp"
 #include <iostream>
+#include <format>
 
 #include "globals.hpp"
 #include "utils.hpp"
@@ -11,6 +12,28 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
+VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_utils_messenger_callback(vk::DebugUtilsMessageSeverityFlagBitsEXT      message_severity,
+                                                                vk::DebugUtilsMessageTypeFlagsEXT             message_type,
+                                                                const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
+                                                                void                                         *user_data) {
+    std::string message = std::format("Debug callback {}\n{}: {}", vk::to_string(message_type), callback_data->pMessageIdName, callback_data->pMessage);
+    switch (message_severity)
+    {
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+            std::cout << message << std::endl;
+            break;
+        case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+            std::cerr << message << std::endl;
+            break;
+        default:
+            std::cout << std::format("Unknown message severity {}!\n{}", vk::to_string(message_severity), message);
+            break;
+    }
+    return VK_FALSE;
+}
+
 namespace vkdemo {
     DeviceContext::~DeviceContext() {
         for (const auto &view: m_swapchain_image_views) {
@@ -20,6 +43,7 @@ namespace vkdemo {
 
         m_device.destroySwapchainKHR(m_swapchain);
         vmaDestroyAllocator(m_vma_allocator);
+        m_instance.destroyDebugUtilsMessengerEXT(m_debug_utils_messenger, nullptr);
         m_device.destroy();
         m_instance.destroy();
     }
@@ -46,9 +70,18 @@ namespace vkdemo {
             extension_names.push_back(sdl_extension_names[i]);
         }
 
+        vk::DebugUtilsMessengerCreateInfoEXT messenger_create_info{};
+        messenger_create_info.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+        messenger_create_info.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+        messenger_create_info.pfnUserCallback = debug_utils_messenger_callback;
+
         vk::InstanceCreateInfo instance_create_info{{}, &app_info, 0, nullptr, static_cast<uint32_t>(extension_names.size()), extension_names.data()};
+        instance_create_info.pNext = &messenger_create_info;
+
         m_instance = vk::createInstance(instance_create_info);
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance);
+
+        m_debug_utils_messenger = m_instance.createDebugUtilsMessengerEXT(messenger_create_info);
     }
 
     void DeviceContext::select_physical_device() {
@@ -97,28 +130,34 @@ namespace vkdemo {
         const std::vector         queue_priorities{1.0f};
         vk::DeviceQueueCreateInfo graphics_queue_create_info{{}, m_graphics_queue_family_index, queue_priorities};
 
-        // Enable vulkan features
+        // Enable desired vulkan features
+        vk::PhysicalDeviceHostImageCopyFeatures host_image_copy_features{};
+        host_image_copy_features.hostImageCopy = true;
+
+        // Enable scalar block layout
+        vk::PhysicalDeviceScalarBlockLayoutFeatures scalar_block_layout_features{};
+        scalar_block_layout_features.scalarBlockLayout = true;
+        scalar_block_layout_features.pNext             = &host_image_copy_features;
+
         vk::PhysicalDeviceVulkan13Features enabled_vk13_features{};
         enabled_vk13_features.synchronization2 = true;
         enabled_vk13_features.dynamicRendering = true;
+        enabled_vk13_features.pNext            = &scalar_block_layout_features;
 
         vk::PhysicalDeviceVulkan12Features enabled_vk12_features{};
-
-        // Descriptor indexing
         enabled_vk12_features.descriptorIndexing                        = true;
         enabled_vk12_features.shaderSampledImageArrayNonUniformIndexing = true;
         enabled_vk12_features.runtimeDescriptorArray                    = true;
         enabled_vk12_features.descriptorBindingVariableDescriptorCount  = true;
-
-        // Lets us access buffers via pointers instead of going through descriptors
-        enabled_vk12_features.bufferDeviceAddress = true;
-        enabled_vk12_features.pNext               = &enabled_vk13_features;
+        enabled_vk12_features.bufferDeviceAddress                       = true;
+        enabled_vk12_features.pNext                                     = &enabled_vk13_features;
 
         vk::PhysicalDeviceFeatures2 enabled_features{};
         enabled_features.features.samplerAnisotropy = true;
+        enabled_features.pNext                      = &enabled_vk12_features;
 
         vk::DeviceCreateInfo device_create_info{};
-        device_create_info.pNext = enabled_vk12_features;
+        device_create_info.pNext = enabled_features;
         device_create_info.setQueueCreateInfos({graphics_queue_create_info});
         device_create_info.setPEnabledExtensionNames(kRequiredDeviceExtensions);
 

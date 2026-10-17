@@ -22,8 +22,9 @@ namespace vkdemo {
         static constexpr vk::Format        kSwapchainFormat     = vk::Format::eB8G8R8A8Srgb;
         static constexpr vk::ColorSpaceKHR kSwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
 
-        const std::vector<const char *> kRequiredInstanceExtensions = {};
-        const std::vector<const char *> kRequiredDeviceExtensions   = {vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName};
+        const std::vector<const char *> kRequiredInstanceExtensions = {vk::EXTDebugUtilsExtensionName};
+        const std::vector<const char *> kRequiredDeviceExtensions   = {vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName, vk::EXTHostImageCopyExtensionName,
+                                                                       vk::EXTScalarBlockLayoutExtensionName};
 
         void create_instance();
         void select_physical_device();
@@ -42,6 +43,8 @@ namespace vkdemo {
         std::vector<vk::Image>     m_swapchain_images{};
         std::vector<vk::ImageView> m_swapchain_image_views{};
         VmaAllocator               m_vma_allocator{nullptr};
+
+        vk::DebugUtilsMessengerEXT m_debug_utils_messenger;
 
         vk::PhysicalDeviceProperties2               m_physical_device_properties{};
         vk::PhysicalDeviceMemoryProperties2         m_physical_device_memory_properties{};
