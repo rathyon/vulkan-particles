@@ -4,7 +4,6 @@
 #include "globals.hpp"
 #include "utils.hpp"
 #include "window.hpp"
-
 #include <SDL3/SDL_vulkan.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
@@ -64,7 +63,7 @@ namespace vkdemo {
 
         // Select the first one: my PC only has 1 GPU
         m_physical_device            = physical_devices[0];
-        m_physical_device_properties = m_physical_device.getProperties2();
+        read_physical_device_properties();
 
         std::cout << "Selected device: " << m_physical_device_properties.properties.deviceName << "\n";
 
@@ -90,6 +89,7 @@ namespace vkdemo {
 
             ++queue_family_index;
         }
+
     }
 
     void DeviceContext::create_logical_device() {
@@ -125,6 +125,13 @@ namespace vkdemo {
         m_graphics_queue = m_device.getQueue2(vk::DeviceQueueInfo2{{}, m_graphics_queue_family_index});
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_device);
+    }
+
+    void DeviceContext::read_physical_device_properties() {
+        m_physical_device_properties = m_physical_device.getProperties2();
+
+        m_physical_device_memory_properties.pNext = &m_physical_device_memory_budget_properties;
+        m_physical_device.getMemoryProperties2(&m_physical_device_memory_properties);
     }
 
     void DeviceContext::create_swapchain(const Window &window) {
@@ -163,15 +170,22 @@ namespace vkdemo {
     }
 
     void DeviceContext::initialize_vma() {
-        VmaVulkanFunctions vulkanFunctions = {};
-        vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
-        vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+        const auto& dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+
+        // Let VMA fetch function pointers dynamically
+        VmaVulkanFunctions vulkan_functions{};
+        vulkan_functions.vkGetInstanceProcAddr = dispatcher.vkGetInstanceProcAddr;
+        vulkan_functions.vkGetDeviceProcAddr = dispatcher.vkGetDeviceProcAddr;
 
         VmaAllocatorCreateInfo allocator_create_info{};
         allocator_create_info.instance = m_instance;
         allocator_create_info.physicalDevice = m_physical_device;
         allocator_create_info.device = m_device;
         allocator_create_info.vulkanApiVersion = kVulkanAPIVersion;
+        allocator_create_info.pVulkanFunctions = &vulkan_functions;
+
+        // Buffer Device Address and Memory Budget extensions are used, they need to be declared to VMA
+        allocator_create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT | VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
 
         vmaCreateAllocator(&allocator_create_info, &m_vma_allocator);
     }
