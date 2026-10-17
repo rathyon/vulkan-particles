@@ -2,7 +2,7 @@
 #define GLOBALS_HPP
 
 #include <string_view>
-
+#include <array>
 #include <glm/vec2.hpp>
 
 namespace vkdemo::globals {
@@ -13,6 +13,8 @@ namespace vkdemo::globals {
     static constexpr bool             kPrintDeviceCapabilities{true};
     static constexpr bool             kPrintDeviceMemoryProperties{true};
     static constexpr bool             kVSyncEnabled{false};
+    static constexpr uint8_t          kFramesInFlight{2};
+
 } // namespace vkdemo::globals
 
 #endif // GLOBALS_HPP

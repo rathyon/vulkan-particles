@@ -1,6 +1,6 @@
 #include "device-context.hpp"
 #include "globals.hpp"
-#include "renderer.hpp"
+#include "renderer-context.hpp"
 #include "window.hpp"
 
 using namespace vkdemo;
@@ -8,12 +8,12 @@ using namespace vkdemo;
 int main() {
 
     Window window{globals::kWindowSize.x, globals::kWindowSize.y};
-    DeviceContext context{};
+    DeviceContext device_context{};
 
-    context.Initialize(window);
+    device_context.Initialize(window);
 
-    Renderer renderer{context};
-    renderer.Initialize();
+    RendererContext renderer_context{device_context};
+    renderer_context.Initialize();
 
     // todo enter render loop here
 

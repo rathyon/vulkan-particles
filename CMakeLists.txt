@@ -21,8 +21,8 @@ add_executable(vulkan_particles
         src/glm-usage.hpp
         src/vma-usage.cpp
         src/vma-usage.hpp
-        src/renderer.cpp
-        src/renderer.hpp
+        src/renderer-context.cpp
+        src/renderer-context.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

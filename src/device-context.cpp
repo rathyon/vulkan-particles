@@ -315,7 +315,7 @@ namespace vkdemo {
         swapchain_create_info.imageColorSpace  = kSwapchainColorSpace;
         swapchain_create_info.imageExtent      = vk::Extent2D{surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height};
         swapchain_create_info.imageArrayLayers = 1;
-        swapchain_create_info.imageUsage       = vk::ImageUsageFlagBits::eColorAttachment;
+        swapchain_create_info.imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
         swapchain_create_info.preTransform     = vk::SurfaceTransformFlagBitsKHR::eIdentity;
         swapchain_create_info.compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 

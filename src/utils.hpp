@@ -2,8 +2,11 @@
 #define UTILS_HPP
 
 #include <iostream>
+#include <vulkan/vulkan.hpp>
 
 namespace vkdemo {
+    template<typename T> using Buffered = std::array<T, globals::kFramesInFlight>;
+
     static void check(const bool result, const std::string_view message = "") {
         if (!result) {
             std::cerr << message << std::endl;
@@ -11,7 +14,7 @@ namespace vkdemo {
         }
     }
 
-    static void check(void* pointer, const std::string_view message = "") {
+    static void check(void *pointer, const std::string_view message = "") {
         if (pointer == nullptr) {
             throw std::runtime_error(message.data());
         }
@@ -30,6 +33,6 @@ namespace vkdemo {
             throw std::runtime_error(message.data());
         }
     }
-}
+} // namespace vkdemo
 
 #endif // UTILS_HPP
