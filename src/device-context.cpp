@@ -1,6 +1,7 @@
 #include "device-context.hpp"
-#include <iostream>
 #include <format>
+#include <iostream>
+#include <unordered_set>
 
 #include "globals.hpp"
 #include "utils.hpp"
@@ -12,13 +13,11 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
-VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_utils_messenger_callback(vk::DebugUtilsMessageSeverityFlagBitsEXT      message_severity,
-                                                                vk::DebugUtilsMessageTypeFlagsEXT             message_type,
-                                                                const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                                void                                         *user_data) {
+// Messenger callback definition
+VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_utils_messenger_callback(vk::DebugUtilsMessageSeverityFlagBitsEXT message_severity, vk::DebugUtilsMessageTypeFlagsEXT message_type,
+                                                                const vk::DebugUtilsMessengerCallbackDataEXT *callback_data, void *user_data) {
     std::string message = std::format("Debug callback {}\n{}: {}", vk::to_string(message_type), callback_data->pMessageIdName, callback_data->pMessage);
-    switch (message_severity)
-    {
+    switch (message_severity) {
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
         case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
@@ -42,6 +41,7 @@ namespace vkdemo {
         m_swapchain_image_views.clear();
 
         m_device.destroySwapchainKHR(m_swapchain);
+        SDL_Vulkan_DestroySurface(m_instance, m_surface, nullptr);
         vmaDestroyAllocator(m_vma_allocator);
         m_instance.destroyDebugUtilsMessengerEXT(m_debug_utils_messenger, nullptr);
         m_device.destroy();
@@ -60,6 +60,10 @@ namespace vkdemo {
         // Initialize the dynamic dispatcher first before any vulkan call
         VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
+        if constexpr (globals::kEnableVulkanLayers) {
+            check(check_layer_support(), "Required Vulkan layers not present!");
+        }
+
         vk::ApplicationInfo app_info{globals::kApplicationName.data(), vk::makeVersion(1, 0, 0), "No engine", vk::makeVersion(1, 0, 0), kVulkanAPIVersion, nullptr};
 
         // include required SDL instance extensions
@@ -72,16 +76,34 @@ namespace vkdemo {
 
         vk::DebugUtilsMessengerCreateInfoEXT messenger_create_info{};
         messenger_create_info.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
-        messenger_create_info.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+        messenger_create_info.messageType     = vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
         messenger_create_info.pfnUserCallback = debug_utils_messenger_callback;
 
+
         vk::InstanceCreateInfo instance_create_info{{}, &app_info, 0, nullptr, static_cast<uint32_t>(extension_names.size()), extension_names.data()};
+        if constexpr (globals::kEnableVulkanLayers) {
+            instance_create_info.enabledLayerCount   = static_cast<uint32_t>(kRequiredLayers.size());
+            instance_create_info.ppEnabledLayerNames = kRequiredLayers.data();
+        }
+
         instance_create_info.pNext = &messenger_create_info;
 
         m_instance = vk::createInstance(instance_create_info);
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance);
 
         m_debug_utils_messenger = m_instance.createDebugUtilsMessengerEXT(messenger_create_info);
+    }
+
+    bool DeviceContext::check_layer_support() {
+        m_layer_properties = vk::enumerateInstanceLayerProperties();
+        std::unordered_set<std::string> required_layers{kRequiredLayers.cbegin(),
+                                                        kRequiredLayers.cend()};
+
+        for (const auto& available_layer : m_layer_properties) {
+            required_layers.erase(available_layer.layerName);
+        }
+
+        return required_layers.empty();
     }
 
     void DeviceContext::select_physical_device() {
@@ -97,6 +119,7 @@ namespace vkdemo {
         }
 
         // Select the first one: my PC only has 1 GPU
+        check(check_device_extension_support(physical_devices[0]), "Required device extensions not present!");
         m_physical_device = physical_devices[0];
         read_physical_device_properties();
 
@@ -126,6 +149,19 @@ namespace vkdemo {
         }
     }
 
+    bool DeviceContext::check_device_extension_support(const vk::PhysicalDevice& physical_device) {
+        m_device_extensions = physical_device.enumerateDeviceExtensionProperties();
+        std::unordered_set<std::string> required_extensions{kRequiredDeviceExtensions.cbegin(),
+                                                            kRequiredDeviceExtensions.cend()};
+
+        // Erase required extensions from the set as they appear. If the set is empty at the end, all required extensions have been found.
+        for (const auto& available_extension : m_device_extensions) {
+            required_extensions.erase(available_extension.extensionName);
+        }
+
+        return required_extensions.empty();
+    }
+
     void DeviceContext::create_logical_device() {
         const std::vector         queue_priorities{1.0f};
         vk::DeviceQueueCreateInfo graphics_queue_create_info{{}, m_graphics_queue_family_index, queue_priorities};
@@ -134,15 +170,10 @@ namespace vkdemo {
         vk::PhysicalDeviceHostImageCopyFeatures host_image_copy_features{};
         host_image_copy_features.hostImageCopy = true;
 
-        // Enable scalar block layout
-        vk::PhysicalDeviceScalarBlockLayoutFeatures scalar_block_layout_features{};
-        scalar_block_layout_features.scalarBlockLayout = true;
-        scalar_block_layout_features.pNext             = &host_image_copy_features;
-
         vk::PhysicalDeviceVulkan13Features enabled_vk13_features{};
         enabled_vk13_features.synchronization2 = true;
         enabled_vk13_features.dynamicRendering = true;
-        enabled_vk13_features.pNext            = &scalar_block_layout_features;
+        enabled_vk13_features.pNext            = &host_image_copy_features;
 
         vk::PhysicalDeviceVulkan12Features enabled_vk12_features{};
         enabled_vk12_features.descriptorIndexing                        = true;
@@ -150,6 +181,7 @@ namespace vkdemo {
         enabled_vk12_features.runtimeDescriptorArray                    = true;
         enabled_vk12_features.descriptorBindingVariableDescriptorCount  = true;
         enabled_vk12_features.bufferDeviceAddress                       = true;
+        enabled_vk12_features.scalarBlockLayout = true;
         enabled_vk12_features.pNext                                     = &enabled_vk13_features;
 
         vk::PhysicalDeviceFeatures2 enabled_features{};
@@ -157,11 +189,11 @@ namespace vkdemo {
         enabled_features.pNext                      = &enabled_vk12_features;
 
         vk::DeviceCreateInfo device_create_info{};
-        device_create_info.pNext = enabled_features;
         device_create_info.setQueueCreateInfos({graphics_queue_create_info});
         device_create_info.setPEnabledExtensionNames(kRequiredDeviceExtensions);
+        device_create_info.pNext = enabled_features;
 
-        m_device         = m_physical_device.createDevice(device_create_info);
+        m_device = m_physical_device.createDevice(device_create_info);
         m_graphics_queue = m_device.getQueue2(vk::DeviceQueueInfo2{{}, m_graphics_queue_family_index});
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_device);
@@ -195,13 +227,13 @@ namespace vkdemo {
     void DeviceContext::create_swapchain(const Window &window) {
         check(window.CreateSurface(m_instance, m_surface), "Failed to create VkSurfaceKHR from window.");
 
-        vk::SurfaceCapabilities2KHR surface_capabilities = m_physical_device.getSurfaceCapabilities2KHR({m_surface});
+        vk::SurfaceCapabilitiesKHR surface_capabilities = m_physical_device.getSurfaceCapabilitiesKHR({m_surface});
         vk::SwapchainCreateInfoKHR  swapchain_create_info{};
         swapchain_create_info.surface          = m_surface;
-        swapchain_create_info.minImageCount    = surface_capabilities.surfaceCapabilities.minImageCount;
+        swapchain_create_info.minImageCount    = surface_capabilities.minImageCount;
         swapchain_create_info.imageFormat      = kSwapchainFormat;
         swapchain_create_info.imageColorSpace  = kSwapchainColorSpace;
-        swapchain_create_info.imageExtent      = vk::Extent2D{surface_capabilities.surfaceCapabilities.currentExtent.width, surface_capabilities.surfaceCapabilities.currentExtent.height};
+        swapchain_create_info.imageExtent      = vk::Extent2D{surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height};
         swapchain_create_info.imageArrayLayers = 1;
         swapchain_create_info.imageUsage       = vk::ImageUsageFlagBits::eColorAttachment;
         swapchain_create_info.preTransform     = vk::SurfaceTransformFlagBitsKHR::eIdentity;
