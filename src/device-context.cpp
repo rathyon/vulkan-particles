@@ -4,14 +4,16 @@
 #include "globals.hpp"
 #include "utils.hpp"
 #include "window.hpp"
+
 #include <SDL3/SDL_vulkan.h>
+#include <vulkan/vulkan_to_string.hpp>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace vkdemo {
     DeviceContext::~DeviceContext() {
-        for (const auto& view: m_swapchain_image_views) {
+        for (const auto &view: m_swapchain_image_views) {
             m_device.destroyImageView(view);
         }
         m_swapchain_image_views.clear();
@@ -62,7 +64,7 @@ namespace vkdemo {
         }
 
         // Select the first one: my PC only has 1 GPU
-        m_physical_device            = physical_devices[0];
+        m_physical_device = physical_devices[0];
         read_physical_device_properties();
 
         std::cout << "Selected device: " << m_physical_device_properties.properties.deviceName << "\n";
@@ -89,7 +91,6 @@ namespace vkdemo {
 
             ++queue_family_index;
         }
-
     }
 
     void DeviceContext::create_logical_device() {
@@ -132,6 +133,24 @@ namespace vkdemo {
 
         m_physical_device_memory_properties.pNext = &m_physical_device_memory_budget_properties;
         m_physical_device.getMemoryProperties2(&m_physical_device_memory_properties);
+
+        if constexpr (globals::kPrintDeviceMemoryProperties) {
+            const auto &properties = m_physical_device_memory_properties.memoryProperties;
+            std::cout << "Physical Device Memory Properties:" << std::endl;
+            std::cout << "\t Heap Count:" << properties.memoryHeapCount << std::endl;
+            std::cout << "\t Type Count:" << properties.memoryTypeCount << std::endl;
+
+            for (int heap_idx = 0; heap_idx < properties.memoryHeapCount; ++heap_idx) {
+                const auto &heap = properties.memoryHeaps[heap_idx];
+                std::cout << "Heap [" << heap_idx << "] Size: " << (static_cast<float>(heap.size) / 1024.f / 1024.f) << " MiB | Flags: " << vk::to_string(heap.flags) << std::endl;
+
+                for (int i = 0; i < properties.memoryTypeCount; ++i) {
+                    const auto &type = properties.memoryTypes[i];
+                    if (type.heapIndex == heap_idx)
+                        std::cout << "\tMemory Type Properties: " << vk::to_string(type.propertyFlags) << std::endl;
+                }
+            }
+        }
     }
 
     void DeviceContext::create_swapchain(const Window &window) {
@@ -170,17 +189,17 @@ namespace vkdemo {
     }
 
     void DeviceContext::initialize_vma() {
-        const auto& dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+        const auto &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
 
         // Let VMA fetch function pointers dynamically
         VmaVulkanFunctions vulkan_functions{};
         vulkan_functions.vkGetInstanceProcAddr = dispatcher.vkGetInstanceProcAddr;
-        vulkan_functions.vkGetDeviceProcAddr = dispatcher.vkGetDeviceProcAddr;
+        vulkan_functions.vkGetDeviceProcAddr   = dispatcher.vkGetDeviceProcAddr;
 
         VmaAllocatorCreateInfo allocator_create_info{};
-        allocator_create_info.instance = m_instance;
-        allocator_create_info.physicalDevice = m_physical_device;
-        allocator_create_info.device = m_device;
+        allocator_create_info.instance         = m_instance;
+        allocator_create_info.physicalDevice   = m_physical_device;
+        allocator_create_info.device           = m_device;
         allocator_create_info.vulkanApiVersion = kVulkanAPIVersion;
         allocator_create_info.pVulkanFunctions = &vulkan_functions;
 
