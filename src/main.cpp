@@ -1,17 +1,17 @@
 #include "device-context.hpp"
+#include "window.hpp"
+
+#include <iostream>
+
+using namespace vkdemo;
 
 int main() {
-    const auto lang = "C++";
-    std::cout << "Hello and welcome to " << lang << "!\n";
 
-    for (int i = 1; i <= 5; i++) {
-        std::cout << "i = " << i << std::endl;
-    }
+    std::cout << "Before start" << std::endl;
+    Window window{1280, 720};
+    DeviceContext context{};
 
-    // Test construction/destruction
-    {
-        vkpart::DeviceContext context{};
-    }
+    context.Initialize(window);
 
     return 0;
 }
