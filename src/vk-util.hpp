@@ -144,6 +144,10 @@ namespace vkdemo {
         VmaAllocation        Allocation{nullptr};
 
         void LayoutTransition(const vk::CommandBuffer &cb, const vk::ImageLayout new_layout) {
+            // Avoid redudant transitions
+            if (Layout == new_layout)
+                return;
+
             vk::ImageMemoryBarrier2 barrier{};
             barrier.image               = Image;
             barrier.subresourceRange    = vk::ImageSubresourceRange{Aspect, 0, 1, 0, 1};

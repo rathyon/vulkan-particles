@@ -40,13 +40,13 @@ target_link_libraries(vulkan_particles PRIVATE ${Slang_LIBRARY})
 # Delete shaders folder before copying it below
 add_custom_command(
         TARGET vulkan_particles
-        POST_BUILD
+        PRE_LINK
         COMMAND ${CMAKE_COMMAND} -E
         rm -r -f $<TARGET_FILE_DIR:vulkan_particles>/shaders/)
 
 # Copy shaders folder into directory of executable
 add_custom_command(
         TARGET vulkan_particles
-        POST_BUILD
+        PRE_LINK
         COMMAND ${CMAKE_COMMAND} -E
         copy_directory ${CMAKE_SOURCE_DIR}/src/shaders/ $<TARGET_FILE_DIR:vulkan_particles>/shaders/)

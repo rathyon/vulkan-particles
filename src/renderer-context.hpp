@@ -25,6 +25,9 @@ namespace vkdemo {
         [[nodiscard]] FrameContext &BeginFrame();
         void                        EndFrame();
 
+        Buffered<ImageDescription> MainColorAttachments{};
+        ImageDescription           DepthStencilAttachment{};
+
     private:
         static constexpr vk::Format        kSwapchainFormat     = vk::Format::eB8G8R8A8Srgb;
         static constexpr vk::ColorSpaceKHR kSwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
@@ -36,11 +39,6 @@ namespace vkdemo {
 
         const DeviceContext &m_device_context;
         const vk::Device    &m_device;
-        const vk::Extent2D   m_render_extent_2d{globals::kRenderExtent.x, globals::kRenderExtent.y};
-        const vk::Extent3D   m_render_extent{globals::kRenderExtent.x, globals::kRenderExtent.y, 1};
-
-        Buffered<ImageDescription> m_color_attachments{};
-        ImageDescription           m_depth_attachment{};
 
         vk::SurfaceKHR                m_surface;
         vk::SwapchainKHR              m_swapchain;

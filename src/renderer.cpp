@@ -10,7 +10,7 @@ namespace vkdemo {
     void Renderer::Initialize(const Window &window) {
         m_device_context.Initialize();
 
-        m_context = std::make_unique<RendererContext>(m_device_context);
+        m_context         = std::make_unique<RendererContext>(m_device_context);
         m_shader_registry = std::make_unique<ShaderRegistry>(m_device_context);
 
         m_context->Initialize(window);
@@ -25,6 +25,36 @@ namespace vkdemo {
 
         while (!stop) {
             FrameContext frame_context = m_context->BeginFrame();
+
+            const auto &cb = frame_context.GraphicsCommandBuffer;
+
+            vk::Viewport viewport{ {}, {}, globals::kRenderExtent2D.width, globals::kRenderExtent3D.height, 0, 1};
+            vk::Rect2D scissor{{}, globals::kRenderExtent2D};
+            cb.setViewport(0, {viewport});
+            cb.setScissor(0, {scissor});
+
+            // todo encapsulate this more neatly into a RenderPass?
+            auto &main_color_attachment = m_context->MainColorAttachments[frame_context.Index];
+            main_color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
+            vk::RenderingAttachmentInfo color_attachment_info{};
+            color_attachment_info.imageView               = main_color_attachment.View;
+            color_attachment_info.imageLayout             = vk::ImageLayout::eColorAttachmentOptimal;
+            color_attachment_info.loadOp                  = vk::AttachmentLoadOp::eClear;
+            color_attachment_info.clearValue.color        = vk::ClearColorValue{0, 0, 0, 0};
+            color_attachment_info.storeOp                 = vk::AttachmentStoreOp::eStore;
+
+            vk::RenderingInfo rendering_info{};
+            rendering_info.renderArea.extent = globals::kRenderExtent2D;
+            rendering_info.layerCount = 1;
+            rendering_info.setColorAttachments({color_attachment_info});
+
+            cb.beginRendering(rendering_info);
+
+            cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Handle);
+            cb.draw(3, 1, 0, 0);
+
+            cb.endRendering();
+
             m_context->EndFrame();
         }
     }
@@ -86,9 +116,9 @@ namespace vkdemo {
         color_blend_attachment_state.colorWriteMask      = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
 
         vk::PipelineColorBlendStateCreateInfo color_blend_state{};
-        color_blend_state.logicOpEnable                  = vk::False;
-        color_blend_state.attachmentCount                = 1;
-        color_blend_state.pAttachments                   = &color_blend_attachment_state;
+        color_blend_state.logicOpEnable   = vk::False;
+        color_blend_state.attachmentCount = 1;
+        color_blend_state.pAttachments    = &color_blend_attachment_state;
 
         vk::PipelineDepthStencilStateCreateInfo depth_stencil_state{};
         depth_stencil_state.depthTestEnable       = false;
@@ -97,8 +127,8 @@ namespace vkdemo {
         depth_stencil_state.depthBoundsTestEnable = vk::False;
         depth_stencil_state.stencilTestEnable     = vk::False;
 
-        std::vector<vk::DynamicState>           dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-        vk::PipelineDynamicStateCreateInfo      dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
+        std::vector<vk::DynamicState>      dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+        vk::PipelineDynamicStateCreateInfo dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
 
         vk::GraphicsPipelineCreateInfo graphics_pipeline_ci{};
         graphics_pipeline_ci.setStages(shader_stages);

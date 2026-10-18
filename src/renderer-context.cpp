@@ -19,10 +19,10 @@ namespace vkdemo {
 
         m_device_context.Device.destroySwapchainKHR(m_swapchain);
 
-        m_device.destroyImageView(m_depth_attachment.View);
-        vmaDestroyImage(m_device_context.VmaAllocator, m_depth_attachment.Image, m_depth_attachment.Allocation);
+        m_device.destroyImageView(DepthStencilAttachment.View);
+        vmaDestroyImage(m_device_context.VmaAllocator, DepthStencilAttachment.Image, DepthStencilAttachment.Allocation);
 
-        for (const auto &attachment: m_color_attachments) {
+        for (const auto &attachment: MainColorAttachments) {
             m_device.destroyImageView(attachment.View);
             vmaDestroyImage(m_device_context.VmaAllocator, attachment.Image, attachment.Allocation);
         }
@@ -80,7 +80,7 @@ namespace vkdemo {
         // Because the swapchain image may be of a different format or resolution, blit is used to resolve these differences.
         const auto &frame_context    = m_frame_contexts[m_frame_index];
         const auto &cb               = frame_context.GraphicsCommandBuffer;
-        auto       &color_attachment = m_color_attachments[m_frame_index];
+        auto       &color_attachment = MainColorAttachments[m_frame_index];
         auto       &swapchain_images = m_swapchain_images[m_swapchain_image_index];
 
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
@@ -88,7 +88,7 @@ namespace vkdemo {
 
         // Define the regions to blit (we will blit the whole swapchain image)
         const vk::Offset3D src_start{0, 0, 0};
-        const vk::Offset3D src_end{globals::kRenderExtent.x, globals::kRenderExtent.y, 1};
+        const vk::Offset3D src_end{globals::kRenderExtent2D.width, globals::kRenderExtent2D.height, 1};
 
         const vk::Offset3D dst_start{0, 0, 0};
         const vk::Offset3D dst_end{globals::kWindowSize.x, globals::kWindowSize.y, 1};
@@ -172,7 +172,7 @@ namespace vkdemo {
         vk::ImageCreateInfo color_create_info{};
         color_create_info.imageType   = vk::ImageType::e2D;
         color_create_info.format      = globals::kColorAttachmentFormat;
-        color_create_info.extent      = m_render_extent;
+        color_create_info.extent      = globals::kRenderExtent3D;
         color_create_info.mipLevels   = 1;
         color_create_info.arrayLayers = 1;
         color_create_info.samples     = vk::SampleCountFlagBits::e1;
@@ -189,7 +189,7 @@ namespace vkdemo {
         color_view_create_info.subresourceRange.levelCount = 1;
         color_view_create_info.subresourceRange.layerCount = 1;
 
-        for (auto &attachment: m_color_attachments) {
+        for (auto &attachment: MainColorAttachments) {
             check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&color_create_info), &alloc_info, reinterpret_cast<VkImage *>(&attachment.Image),
                                  &attachment.Allocation, nullptr),
                   "Failed to create color attachment");
@@ -203,7 +203,7 @@ namespace vkdemo {
         vk::ImageCreateInfo depth_create_info{};
         depth_create_info.imageType     = vk::ImageType::e2D;
         depth_create_info.format        = globals::kDepthStencilAttachmentFormat;
-        depth_create_info.extent        = m_render_extent;
+        depth_create_info.extent        = globals::kRenderExtent3D;
         depth_create_info.mipLevels     = 1;
         depth_create_info.arrayLayers   = 1;
         depth_create_info.samples       = vk::SampleCountFlagBits::e1;
@@ -211,20 +211,20 @@ namespace vkdemo {
         depth_create_info.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
         depth_create_info.initialLayout = vk::ImageLayout::eUndefined;
 
-        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&depth_create_info), &alloc_info, reinterpret_cast<VkImage *>(&m_depth_attachment.Image),
-                             &m_depth_attachment.Allocation, nullptr),
+        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&depth_create_info), &alloc_info, reinterpret_cast<VkImage *>(&DepthStencilAttachment.Image),
+                             &DepthStencilAttachment.Allocation, nullptr),
               "Failed to create depth attachment");
 
         vk::ImageViewCreateInfo depth_view_create_info{};
-        depth_view_create_info.image                       = m_depth_attachment.Image;
+        depth_view_create_info.image                       = DepthStencilAttachment.Image;
         depth_view_create_info.viewType                    = vk::ImageViewType::e2D;
         depth_view_create_info.format                      = depth_create_info.format;
         depth_view_create_info.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
         depth_view_create_info.subresourceRange.levelCount = 1;
         depth_view_create_info.subresourceRange.layerCount = 1;
 
-        m_depth_attachment.View   = m_device.createImageView(depth_view_create_info);
-        m_depth_attachment.Aspect = depth_view_create_info.subresourceRange.aspectMask;
+        DepthStencilAttachment.View   = m_device.createImageView(depth_view_create_info);
+        DepthStencilAttachment.Aspect = depth_view_create_info.subresourceRange.aspectMask;
     }
 
     void RendererContext::create_swapchain(const Window &window) {

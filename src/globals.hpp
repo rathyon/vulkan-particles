@@ -7,7 +7,8 @@
 
 namespace vkdemo::globals {
     static constexpr std::string_view kApplicationName = "Vulkan Demo";
-    static constexpr glm::ivec2       kRenderExtent{1920, 1080};
+    static constexpr vk::Extent2D     kRenderExtent2D{1920, 1080};
+    static constexpr vk::Extent3D     kRenderExtent3D{1920, 1080, 1};
     static constexpr glm::ivec2       kWindowSize{1280, 720};
     static constexpr bool             kEnableVulkanLayers = true;
     static constexpr bool             kPrintDeviceCapabilities{true};

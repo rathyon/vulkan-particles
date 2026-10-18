@@ -25,5 +25,5 @@ VSOut vs_main(VSInput input)
 [shader("fragment")]
 float4 fs_main(VSOut input) : SV_Target
 {
-    return float4(0,1,0,1);
+    return float4(input.TexCoord, 0, 1);
 }
