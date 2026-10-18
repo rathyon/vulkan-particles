@@ -267,6 +267,9 @@ namespace vkdemo {
 
         Device         = PhysicalDevice.createDevice(device_create_info);
         GraphicsQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, GraphicsQueueFamily});
+        PresentQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, PresentQueueFamily});
+        ComputeQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, ComputeQueueFamily});
+        DedicatedTransferQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, DedicatedTransferQueueFamily});
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(Device);
     }

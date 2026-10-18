@@ -45,10 +45,9 @@ namespace vkdemo {
         vk::SurfaceKHR                m_surface;
         vk::SwapchainKHR              m_swapchain;
         std::vector<ImageDescription> m_swapchain_images{};
-
+        uint32_t                      m_swapchain_image_index{};
 
         Buffered<vk::Fence>        m_fences{};
-        uint32_t                   m_swapchain_image_index{};
         Buffered<vk::Semaphore>    m_image_acquired_semaphores{};
         std::vector<vk::Semaphore> m_render_complete_semaphores{};
 

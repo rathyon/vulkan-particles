@@ -8,12 +8,12 @@ namespace vkdemo {
     }
 
     void Renderer::Initialize(const Window &window) {
-        m_device_context.Initialize(window);
+        m_device_context.Initialize();
 
         m_context = std::make_unique<RendererContext>(m_device_context);
         m_shader_registry = std::make_unique<ShaderRegistry>(m_device_context);
 
-        m_context->Initialize();
+        m_context->Initialize(window);
         m_shader_registry->Initialize();
         m_shader_registry->LoadShaders();
 
@@ -25,7 +25,6 @@ namespace vkdemo {
 
         while (!stop) {
             FrameContext frame_context = m_context->BeginFrame();
-
             m_context->EndFrame();
         }
     }

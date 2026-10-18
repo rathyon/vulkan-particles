@@ -41,10 +41,10 @@ namespace vkdemo {
     }
 
     void RendererContext::Initialize(const Window &window) {
+        create_swapchain(window);
         create_sync_objects();
         create_command_buffers();
         create_attachments();
-        create_swapchain(window);
 
         for (size_t i = 0; i < m_frame_contexts.size(); ++i) {
             m_frame_contexts[i].Index                 = i;
@@ -60,24 +60,24 @@ namespace vkdemo {
         m_device.resetFences(m_fences[m_frame_index]);
 
         vk::Result acquire_result = m_device.acquireNextImageKHR(m_swapchain, kTimeout, m_image_acquired_semaphores[m_frame_index], nullptr, &m_swapchain_image_index);
-        if (acquire_result == vk::Result::eErrorOutOfDateKHR) {
-            // todo (update swapchain?)
-        } else if (acquire_result != vk::Result::eSuccess && acquire_result != vk::Result::eSuboptimalKHR) [[unlikely]] {
-            std::cerr << std::format("Failed to acquire next swapchain image. Vulkan Error code: {}", vk::to_string(acquire_result));
-        } else {
-            throw std::runtime_error("Failed to acquire next swapchain image!");
+
+        if (acquire_result != vk::Result::eSuccess) {
+            throw std::runtime_error(std::format("Failed to acquire next swapchain image! Code: {}", vk::to_string(acquire_result)));
         }
 
-        static_assert(false && "this is the last bit I was writing Zzzz....")
-        m_frame_contexts[m_frame_index].GraphicsCommandBuffer = m_graphics_command_buffers[m_frame_index];
+        auto &cb = m_frame_contexts[m_frame_index].GraphicsCommandBuffer;
+        cb       = m_graphics_command_buffers[m_frame_index];
+
+        cb.reset();
+        cb.begin(vk::CommandBufferBeginInfo{});
 
         // return a copy of the new frame context
         return m_frame_contexts[m_frame_index];
     }
 
     void RendererContext::EndFrame() {
-        // todo copy/blit from main color attachment to swapchain image
-
+        // Copy contents from main color attachment to swapchain image.
+        // Because the swapchain image may be of a different format or resolution, blit is used to resolve these differences.
         const auto &frame_context    = m_frame_contexts[m_frame_index];
         const auto &cb               = frame_context.GraphicsCommandBuffer;
         auto       &color_attachment = m_color_attachments[m_frame_index];
@@ -86,7 +86,6 @@ namespace vkdemo {
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
         swapchain_images.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
 
-        // Note: blitting only works when the command buffer belongs to a queue with the graphics flag
         // Define the regions to blit (we will blit the whole swapchain image)
         const vk::Offset3D src_start{0, 0, 0};
         const vk::Offset3D src_end{globals::kRenderExtent.x, globals::kRenderExtent.y, 1};
@@ -110,7 +109,20 @@ namespace vkdemo {
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
         swapchain_images.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
 
+        // Finish command buffer recording
         cb.end();
+
+        // Submit command buffer to graphics queue
+        // Wait for final write into color attachment
+        std::vector<vk::PipelineStageFlags> wait_stage = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+        vk::SubmitInfo                      submit_info{{m_image_acquired_semaphores[m_frame_index]}, wait_stage, {cb}, {m_render_complete_semaphores[m_swapchain_image_index]}};
+        m_device_context.GraphicsQueue.submit({submit_info}, m_fences[m_frame_index]);
+
+        // Present the swapchain via the present queue
+        // By default VulkanHPP throws exception when result isn't Success. But throwing/catching exceptions isn't desired here so the C API is used.
+        vk::PresentInfoKHR present_info{{m_render_complete_semaphores[m_swapchain_image_index]}, {m_swapchain}, {m_swapchain_image_index}};
+        auto               present_result = static_cast<vk::Result>(vkQueuePresentKHR(m_device_context.PresentQueue, present_info));
+        check(present_result == vk::Result::eSuccess, "Failed to present swapchain!");
 
         m_frame_index = (m_frame_index + 1) % globals::kFramesInFlight;
     }
@@ -247,8 +259,9 @@ namespace vkdemo {
         image_view_create_info.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
         for (size_t i = 0; i < swapchain_images.size(); ++i) {
-            m_swapchain_images[i].Image = swapchain_images[i];
-            m_swapchain_images[i].View  = m_device.createImageView(image_view_create_info);
+            image_view_create_info.image = m_swapchain_images[i].Image = swapchain_images[i];
+            m_swapchain_images[i].View                                 = m_device.createImageView(image_view_create_info);
+            m_swapchain_images[i].Aspect                               = image_view_create_info.subresourceRange.aspectMask;
         }
     }
 } // namespace vkdemo
