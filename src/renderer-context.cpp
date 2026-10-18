@@ -6,6 +6,8 @@
 
 namespace vkdemo {
 
+    static constexpr auto kFenceTimeout = std::numeric_limits<uint64_t>::max();
+
     RendererContext::RendererContext(const DeviceContext &device_context) : m_device_context(device_context), m_device(m_device_context.Device) {}
 
     RendererContext::~RendererContext() {
@@ -49,69 +51,58 @@ namespace vkdemo {
         }
     }
 
-    FrameContext *RendererContext::BeginFrame() {
-        static constexpr auto kTimeout = std::numeric_limits<uint64_t>::max();
+    FrameContext *RendererContext::BeginFrame() { return &m_frame_contexts[m_frame_index]; }
 
-        // Wait for frame completion
-        check(m_device.waitForFences(m_graphics_fences[m_frame_index], true, kTimeout) == vk::Result::eSuccess, "Failed to wait for fences");
+    void RendererContext::BeginGraphicsCommands() {
+        // Wait for graphics frame completion
+        check(m_device.waitForFences(m_graphics_fences[m_frame_index], true, kFenceTimeout) == vk::Result::eSuccess, "Failed to wait for graphics fences");
         m_device.resetFences(m_graphics_fences[m_frame_index]);
 
-        vk::Result acquire_result = m_device.acquireNextImageKHR(m_swapchain, kTimeout, m_image_acquired_semaphores[m_frame_index], nullptr, &m_swapchain_image_index);
+        vk::Result acquire_result = m_device.acquireNextImageKHR(m_swapchain, kFenceTimeout, m_image_acquired_semaphores[m_frame_index], nullptr, &m_swapchain_image_index);
 
         if (acquire_result != vk::Result::eSuccess) {
             throw std::runtime_error(std::format("Failed to acquire next swapchain image! Code: {}", vk::to_string(acquire_result)));
         }
 
         auto &cb = m_frame_contexts[m_frame_index].GraphicsCB;
-        cb       = m_graphics_command_buffers[m_frame_index];
-
         cb.reset();
         cb.begin(vk::CommandBufferBeginInfo{});
-
-        return &m_frame_contexts[m_frame_index];
     }
 
-    void RendererContext::EndFrame() {
+    void RendererContext::BeginComputeCommands() {
+        // Wait for compute frame completion
+        check(m_device.waitForFences(m_compute_fences[m_frame_index], true, kFenceTimeout) == vk::Result::eSuccess, "Failed to wait for compute fences");
+        m_device.resetFences(m_compute_fences[m_frame_index]);
+
+        auto &cb = m_frame_contexts[m_frame_index].ComputeCB;
+        cb.reset();
+        cb.begin(vk::CommandBufferBeginInfo{});
+    }
+
+    void RendererContext::EndFrame() { m_frame_index = (m_frame_index + 1) % globals::kFramesInFlight; }
+
+    void RendererContext::EndGraphicsCommands() {
         // Copy contents from main color attachment to swapchain image.
         // Because the swapchain image may be of a different format or resolution, blit is used to resolve these differences.
-        const auto &frame_context    = m_frame_contexts[m_frame_index];
-        const auto &cb               = frame_context.GraphicsCB;
-        auto       &color_attachment = *MainColorAttachments[m_frame_index];
-        auto       &swapchain_image  = *m_swapchain_images[m_swapchain_image_index];
-
-        color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
-        swapchain_image.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
-
-        // Define the regions to blit (we will blit the whole swapchain image)
-        const vk::Offset3D src_start{0, 0, 0};
-        const vk::Offset3D src_end{globals::kRenderExtent2D.width, globals::kRenderExtent2D.height, 1};
-
-        const vk::Offset3D dst_start{0, 0, 0};
-        const vk::Offset3D dst_end{globals::kWindowSize.x, globals::kWindowSize.y, 1};
-
-        vk::BlitImageInfo2 blit_info{};
-        blit_info.srcImage       = color_attachment.Handle;
-        blit_info.srcImageLayout = vk::ImageLayout::eTransferSrcOptimal;
-        blit_info.dstImage       = swapchain_image.Handle;
-        blit_info.dstImageLayout = vk::ImageLayout::eTransferDstOptimal;
-        blit_info.filter         = vk::Filter::eNearest;
-
-        constexpr vk::ImageSubresourceLayers subresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
-        vk::ImageBlit2                       blit{subresource, {src_start, src_end}, subresource, {dst_start, dst_end}};
-        blit_info.setRegions(blit);
-
-        cb.blitImage2(blit_info);
-
-        color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
-        swapchain_image.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
+        const auto &frame_context = m_frame_contexts[m_frame_index];
+        const auto &cb            = frame_context.GraphicsCB;
+        copy_main_color_attachment_to_swapchain(cb);
 
         // Finish command buffer recording
         cb.end();
 
         // Submit command buffer to graphics queue
-        // Wait for final write into color attachment
-        std::vector<vk::PipelineStageFlags> wait_stage = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-        vk::SubmitInfo                      submit_info{{m_image_acquired_semaphores[m_frame_index]}, wait_stage, {cb}, {m_render_complete_semaphores[m_swapchain_image_index]}};
+        // Wait for final write into color attachment and for compute to finish
+        std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eVertexInput};
+        std::vector                         wait_semaphores{m_image_acquired_semaphores[m_frame_index], m_compute_complete_semaphores[m_frame_index]};
+        std::vector                         signal_semaphores{m_render_complete_semaphores[m_swapchain_image_index], m_compute_ready_semaphores[m_frame_index]};
+
+        vk::SubmitInfo submit_info{};
+        submit_info.setWaitSemaphores(wait_semaphores);
+        submit_info.setWaitDstStageMask(wait_stage_mask);
+        submit_info.setCommandBuffers(cb);
+        submit_info.setSignalSemaphores(signal_semaphores);
+
         m_device_context.GraphicsQueue.submit({submit_info}, m_graphics_fences[m_frame_index]);
 
         // Present the swapchain via the present queue
@@ -119,8 +110,22 @@ namespace vkdemo {
         vk::PresentInfoKHR present_info{{m_render_complete_semaphores[m_swapchain_image_index]}, {m_swapchain}, {m_swapchain_image_index}};
         auto               present_result = static_cast<vk::Result>(vkQueuePresentKHR(m_device_context.PresentQueue, present_info));
         check(present_result == vk::Result::eSuccess, "Failed to present swapchain!");
+    }
 
-        m_frame_index = (m_frame_index + 1) % globals::kFramesInFlight;
+    void RendererContext::EndComputeCommands() {
+        const auto &frame_context = m_frame_contexts[m_frame_index];
+        const auto &cb            = frame_context.ComputeCB;
+
+        // Finish command buffer recording
+        cb.end();
+
+        // The previous frame index is used because this is the index of the semaphore signalled by the graphics queue in the last frame
+        const int prev_frame_index = std::abs(static_cast<int>(m_frame_index) - 1) % globals::kFramesInFlight;
+        assert(prev_frame_index < globals::kFramesInFlight && prev_frame_index >= 0);
+
+        std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eComputeShader};
+        vk::SubmitInfo                      submit_info{{m_compute_ready_semaphores[prev_frame_index]}, wait_stage_mask, {cb}, {m_compute_complete_semaphores[m_frame_index]}};
+        m_device_context.ComputeQueue.submit({submit_info}, m_compute_fences[m_frame_index]);
     }
 
     void RendererContext::create_command_buffers() {
@@ -153,10 +158,10 @@ namespace vkdemo {
 
         vk::SemaphoreCreateInfo semaphore_create_info{};
         for (uint8_t i = 0; i < globals::kFramesInFlight; ++i) {
-            m_graphics_fences[i]           = m_device.createFence(fence_create_info);
-            m_compute_fences[i]            = m_device.createFence(fence_create_info);
-            m_image_acquired_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
-            m_compute_ready_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
+            m_graphics_fences[i]             = m_device.createFence(fence_create_info);
+            m_compute_fences[i]              = m_device.createFence(fence_create_info);
+            m_image_acquired_semaphores[i]   = m_device.createSemaphore(semaphore_create_info);
+            m_compute_ready_semaphores[i]    = m_device.createSemaphore(semaphore_create_info);
             m_compute_complete_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
 
             check(m_graphics_fences[i] != nullptr, "Failed to create fence");
@@ -170,6 +175,11 @@ namespace vkdemo {
             m_render_complete_semaphores.emplace_back(m_device.createSemaphore(semaphore_create_info));
             check(m_render_complete_semaphores[i] != nullptr, "Failed to create semaphore");
         }
+
+        // The first used compute ready semaphore must start signaled. First call into EndComputeCommands requires this to not block.
+        constexpr uint8_t index = globals::kFramesInFlight - 1;
+        vk::SubmitInfo    submit_info{{}, {}, {}, {m_compute_ready_semaphores[index]}};
+        m_device_context.ComputeQueue.submit({submit_info}, nullptr);
     }
 
     void RendererContext::create_attachments() {
@@ -279,5 +289,36 @@ namespace vkdemo {
             m_swapchain_images[i]->View                                  = m_device.createImageView(image_view_create_info);
             m_swapchain_images[i]->Aspect                                = image_view_create_info.subresourceRange.aspectMask;
         }
+    }
+
+    void RendererContext::copy_main_color_attachment_to_swapchain(vk::CommandBuffer cb) {
+        auto &color_attachment = *MainColorAttachments[m_frame_index];
+        auto &swapchain_image  = *m_swapchain_images[m_swapchain_image_index];
+
+        color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
+        swapchain_image.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
+
+        // Define the regions to blit (we will blit the whole swapchain image)
+        const vk::Offset3D src_start{0, 0, 0};
+        const vk::Offset3D src_end{globals::kRenderExtent2D.width, globals::kRenderExtent2D.height, 1};
+
+        const vk::Offset3D dst_start{0, 0, 0};
+        const vk::Offset3D dst_end{globals::kWindowSize.x, globals::kWindowSize.y, 1};
+
+        vk::BlitImageInfo2 blit_info{};
+        blit_info.srcImage       = color_attachment.Handle;
+        blit_info.srcImageLayout = vk::ImageLayout::eTransferSrcOptimal;
+        blit_info.dstImage       = swapchain_image.Handle;
+        blit_info.dstImageLayout = vk::ImageLayout::eTransferDstOptimal;
+        blit_info.filter         = vk::Filter::eNearest;
+
+        constexpr vk::ImageSubresourceLayers subresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
+        vk::ImageBlit2                       blit{subresource, {src_start, src_end}, subresource, {dst_start, dst_end}};
+        blit_info.setRegions(blit);
+
+        cb.blitImage2(blit_info);
+
+        color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
+        swapchain_image.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
     }
 } // namespace vkdemo

@@ -36,7 +36,7 @@ namespace vkdemo {
         FrameContext *m_frame_context = nullptr;
 
         Pipeline m_fullscreen_pipeline{};
-        Pipeline m_compute_pipeline{};
+        Pipeline m_simple_compute_pipeline{};
     };
 } // namespace vkdemo
 

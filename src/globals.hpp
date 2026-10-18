@@ -14,7 +14,7 @@ namespace vkdemo::globals {
     static constexpr bool             kPrintDeviceCapabilities{true};
     static constexpr bool             kPrintDeviceMemoryProperties{true};
     static constexpr bool             kVSyncEnabled{false};
-    static constexpr uint8_t          kFramesInFlight{2};
+    static constexpr uint32_t         kFramesInFlight{2};
     static constexpr vk::Format       kColorAttachmentFormat        = vk::Format::eB8G8R8A8Unorm;
     static constexpr vk::Format       kDepthStencilAttachmentFormat = vk::Format::eD32SfloatS8Uint;
     static constexpr std::string_view kVertexEntryFunctionName      = "vs_main";

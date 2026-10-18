@@ -26,9 +26,13 @@ namespace vkdemo {
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
 
-            // fullscreen_render_pass();
-
+            m_context->BeginComputeCommands();
             // simple_compute_pass();
+            m_context->EndComputeCommands();
+
+            m_context->BeginGraphicsCommands();
+            // fullscreen_render_pass();
+            m_context->EndGraphicsCommands();
 
             m_context->EndFrame();
         }
@@ -137,19 +141,19 @@ namespace vkdemo {
         pipeline_layout_ci.setLayoutCount = 0;
         pipeline_layout_ci.pSetLayouts    = nullptr;
 
-        m_compute_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
-        check(m_compute_pipeline.Layout != nullptr);
+        m_simple_compute_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
+        check(m_simple_compute_pipeline.Layout != nullptr);
 
         ShaderModule *simple_compute_module = m_shader_registry->GetModule("simple-compute.slang");
         vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, simple_compute_module->Module, globals::kComputeEntryFunctionName.data()};
 
         vk::ComputePipelineCreateInfo pipeline_ci{};
-        pipeline_ci.layout = m_compute_pipeline.Layout;
+        pipeline_ci.layout = m_simple_compute_pipeline.Layout;
         pipeline_ci.stage = shader_stage_ci;
 
         const auto result = m_device_context.Device.createComputePipeline(nullptr, pipeline_ci);
         check(result.result == vk::Result::eSuccess, "Failed to create compute pipeline!");
-        m_compute_pipeline.Handle = result.value;
+        m_simple_compute_pipeline.Handle = result.value;
     }
 
     void Renderer::fullscreen_render_pass() {
@@ -182,6 +186,12 @@ namespace vkdemo {
         cb.endRendering();
     }
 
-    void Renderer::simple_compute_pass() {}
+    void Renderer::simple_compute_pass() {
+        const auto& cb = m_frame_context->ComputeCB;
+
+        cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_simple_compute_pipeline.Handle);
+
+        // cb.dispatch();
+    }
 
 } // namespace vkdemo
