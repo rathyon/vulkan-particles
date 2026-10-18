@@ -23,7 +23,7 @@ namespace vkdemo {
 
     private:
         static constexpr std::string_view kShaderFolder{"shaders"};
-        const std::vector<std::string>    kShaderFilenames{"test-shader.comp.slang"};
+        const std::vector<std::string>    kShaderFilenames{"fullscreen.slang", "test-shader.comp.slang"};
 
         struct ShaderModule {
             Slang::ComPtr<slang::IModule> SlangModule{};

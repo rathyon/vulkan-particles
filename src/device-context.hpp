@@ -45,8 +45,11 @@ namespace vkdemo {
 
         const std::vector<const char *> kRequiredLayers             = {"VK_LAYER_KHRONOS_validation"};
         const std::vector<const char *> kRequiredInstanceExtensions = {vk::EXTDebugUtilsExtensionName};
-        const std::vector<const char *> kRequiredDeviceExtensions   = {vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName, vk::EXTHostImageCopyExtensionName,
-                                                                       vk::EXTScalarBlockLayoutExtensionName};
+        const std::vector<const char *> kRequiredDeviceExtensions   = {vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName,
+                                                                       vk::EXTHostImageCopyExtensionName,     // Required for image copies on the host
+                                                                       vk::EXTScalarBlockLayoutExtensionName, // Required for scalar block layouts (no padding)
+                                                                       vk::KHRShaderDrawParametersExtensionName // Required for using special semantic values in Slang shaders
+        };
 
         void               create_instance();
         [[nodiscard]] bool check_layer_support();
