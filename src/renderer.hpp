@@ -14,6 +14,7 @@ namespace vkdemo {
         virtual ~Renderer();
 
         void Initialize(const Window &window);
+        void RenderLoop();
 
     private:
         struct Pipeline {

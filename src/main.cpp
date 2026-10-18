@@ -11,8 +11,7 @@ int main() {
 
     Renderer renderer{};
     renderer.Initialize(window);
-
-    // todo enter render loop here
+    renderer.RenderLoop();
 
     return 0;
 }

@@ -1,7 +1,7 @@
 #include "shader-registry.hpp"
 
 #include "device-context.hpp"
-#include "utils.hpp"
+#include "util.hpp"
 
 #include <array>
 #include <filesystem>

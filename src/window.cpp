@@ -1,7 +1,7 @@
 #include "window.hpp"
 
 #include "globals.hpp"
-#include "utils.hpp"
+#include "util.hpp"
 
 #include <SDL3/SDL_vulkan.h>
 

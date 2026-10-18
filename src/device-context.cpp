@@ -4,7 +4,7 @@
 #include <unordered_set>
 
 #include "globals.hpp"
-#include "utils.hpp"
+#include "util.hpp"
 #include "window.hpp"
 
 #include <SDL3/SDL_vulkan.h>
@@ -35,25 +35,17 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL debug_utils_messenger_callback(vk::DebugUtilsMe
 
 namespace vkdemo {
     DeviceContext::~DeviceContext() {
-        for (const auto &view: SwapchainImageViews) {
-            Device.destroyImageView(view);
-        }
-        SwapchainImageViews.clear();
-
-        Device.destroySwapchainKHR(Swapchain);
-        SDL_Vulkan_DestroySurface(Instance, Surface, nullptr);
         vmaDestroyAllocator(VmaAllocator);
         Instance.destroyDebugUtilsMessengerEXT(m_debug_utils_messenger, nullptr);
         Device.destroy();
         Instance.destroy();
     }
 
-    void DeviceContext::Initialize(const Window &window) {
+    void DeviceContext::Initialize() {
         create_instance();
         select_physical_device();
         create_logical_device();
         initialize_vma();
-        create_swapchain(window);
     }
 
     void DeviceContext::create_instance() {
@@ -301,41 +293,6 @@ namespace vkdemo {
                         std::cout << "\tMemory Type Properties: " << vk::to_string(type.propertyFlags) << std::endl;
                 }
             }
-        }
-    }
-
-    void DeviceContext::create_swapchain(const Window &window) {
-        check(window.CreateSurface(Instance, Surface), "Failed to create VkSurfaceKHR from window.");
-
-        vk::SurfaceCapabilitiesKHR surface_capabilities = PhysicalDevice.getSurfaceCapabilitiesKHR({Surface});
-        vk::SwapchainCreateInfoKHR swapchain_create_info{};
-        swapchain_create_info.surface          = Surface;
-        swapchain_create_info.minImageCount    = surface_capabilities.minImageCount;
-        swapchain_create_info.imageFormat      = kSwapchainFormat;
-        swapchain_create_info.imageColorSpace  = kSwapchainColorSpace;
-        swapchain_create_info.imageExtent      = vk::Extent2D{surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height};
-        swapchain_create_info.imageArrayLayers = 1;
-        swapchain_create_info.imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
-        swapchain_create_info.preTransform     = vk::SurfaceTransformFlagBitsKHR::eIdentity;
-        swapchain_create_info.compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-
-        if constexpr (globals::kVSyncEnabled) {
-            swapchain_create_info.presentMode = vk::PresentModeKHR::eMailbox; // V-SYNC, no screen tearing
-        } else {
-            swapchain_create_info.presentMode = vk::PresentModeKHR::eImmediate; // Uncapped framerate, screen tearing
-        }
-
-        Swapchain        = Device.createSwapchainKHR(swapchain_create_info);
-        SwapchainImages = Device.getSwapchainImagesKHR(Swapchain);
-
-        vk::ImageViewCreateInfo image_view_create_info{};
-        image_view_create_info.viewType         = vk::ImageViewType::e2D;
-        image_view_create_info.format           = kSwapchainFormat;
-        image_view_create_info.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
-
-        for (const auto &swapchain_image: SwapchainImages) {
-            image_view_create_info.image = swapchain_image;
-            SwapchainImageViews.emplace_back(Device.createImageView(image_view_create_info));
         }
     }
 

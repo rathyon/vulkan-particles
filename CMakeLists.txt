@@ -16,7 +16,7 @@ add_executable(vulkan_particles
         src/device-context.cpp
         src/window.cpp
         src/window.hpp
-        src/utils.hpp
+        src/util.hpp
         src/globals.hpp
         src/glm-usage.hpp
         src/vma-usage.cpp
@@ -27,6 +27,7 @@ add_executable(vulkan_particles
         src/shader-registry.hpp
         src/renderer.cpp
         src/Renderer.hpp
+        src/vk-util.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

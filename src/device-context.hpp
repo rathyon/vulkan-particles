@@ -6,16 +6,15 @@
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.hpp>
 
-#include "vma-usage.hpp"
+#include "vk-util.hpp"
 
 namespace vkdemo {
-    class Window;
     class DeviceContext {
     public:
         DeviceContext() = default;
         virtual ~DeviceContext();
 
-        void Initialize(const Window &window);
+        void Initialize();
 
         vk::Instance       Instance;
         vk::PhysicalDevice PhysicalDevice;
@@ -31,24 +30,18 @@ namespace vkdemo {
         vk::Queue ComputeQueue;
         vk::Queue DedicatedTransferQueue;
 
-        vk::SurfaceKHR             Surface;
-        vk::SwapchainKHR           Swapchain;
-        std::vector<vk::Image>     SwapchainImages{};
-        std::vector<vk::ImageView> SwapchainImageViews{};
-
-        VmaAllocator VmaAllocator{nullptr};
+        VmaAllocator   VmaAllocator{nullptr};
 
     private:
         static constexpr uint32_t          kVulkanAPIVersion    = vk::ApiVersion14;
-        static constexpr vk::Format        kSwapchainFormat     = vk::Format::eB8G8R8A8Srgb;
-        static constexpr vk::ColorSpaceKHR kSwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
 
         const std::vector<const char *> kRequiredLayers             = {"VK_LAYER_KHRONOS_validation"};
         const std::vector<const char *> kRequiredInstanceExtensions = {vk::EXTDebugUtilsExtensionName};
-        const std::vector<const char *> kRequiredDeviceExtensions   = {vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName,
-                                                                       vk::EXTHostImageCopyExtensionName,     // Required for image copies on the host
-                                                                       vk::EXTScalarBlockLayoutExtensionName, // Required for scalar block layouts (no padding)
-                                                                       vk::KHRShaderDrawParametersExtensionName // Required for using special semantic values in Slang shaders
+        const std::vector<const char *> kRequiredDeviceExtensions   = {
+                vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName,
+                vk::EXTHostImageCopyExtensionName,       // Required for image copies on the host
+                vk::EXTScalarBlockLayoutExtensionName,   // Required for scalar block layouts (no padding)
+                vk::KHRShaderDrawParametersExtensionName // Required for using special semantic values in Slang shaders
         };
 
         void               create_instance();
@@ -59,7 +52,6 @@ namespace vkdemo {
         void               select_queue_families();
         [[nodiscard]] bool select_transfer_queue_family(const std::vector<vk::QueueFamilyProperties> &properties_list);
         void               read_physical_device_properties();
-        void               create_swapchain(const Window &window);
         void               initialize_vma();
 
         std::vector<vk::LayerProperties>     m_layer_properties;

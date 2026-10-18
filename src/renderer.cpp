@@ -20,6 +20,16 @@ namespace vkdemo {
         create_pipelines();
     }
 
+    void Renderer::RenderLoop() {
+        bool stop = false;
+
+        while (!stop) {
+            FrameContext frame_context = m_context->BeginFrame();
+
+            m_context->EndFrame();
+        }
+    }
+
     void Renderer::create_pipelines() { create_fullscreen_pipeline(); }
 
     void Renderer::create_fullscreen_pipeline() {
