@@ -22,7 +22,7 @@ namespace vkdemo {
 
         void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout);
 
-    private:
+    protected:
         const DeviceContext &m_device_context;
     };
 } // namespace vkdemo

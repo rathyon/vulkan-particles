@@ -26,13 +26,18 @@ namespace vkdemo {
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
 
-            fullscreen_render_pass();
+            // fullscreen_render_pass();
+
+            // simple_compute_pass();
 
             m_context->EndFrame();
         }
     }
 
-    void Renderer::create_pipelines() { create_fullscreen_pipeline(); }
+    void Renderer::create_pipelines() {
+        create_fullscreen_pipeline();
+        create_compute_pipeline();
+    }
 
     void Renderer::create_fullscreen_pipeline() {
         // This fullscreen shader uses a technique described by Sascha Willems:
@@ -47,8 +52,8 @@ namespace vkdemo {
 
         ShaderModule *fullscreen_module = m_shader_registry->GetModule("fullscreen.slang");
 
-        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, fullscreen_module->Module, "vs_main"},
-                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, fullscreen_module->Module, "fs_main"}};
+        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, fullscreen_module->Module, globals::kVertexEntryFunctionName.data()},
+                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, fullscreen_module->Module, globals::kFragmentEntryFunctionName.data()}};
 
         // Fullscreen shader is "geometry-less"
         vk::PipelineVertexInputStateCreateInfo vertex_input_ci{};
@@ -106,25 +111,45 @@ namespace vkdemo {
         std::vector<vk::DynamicState>      dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
         vk::PipelineDynamicStateCreateInfo dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
 
-        vk::GraphicsPipelineCreateInfo graphics_pipeline_ci{};
-        graphics_pipeline_ci.setStages(shader_stages);
-        graphics_pipeline_ci.pVertexInputState   = &vertex_input_ci;
-        graphics_pipeline_ci.pInputAssemblyState = &input_assembly_state;
-        graphics_pipeline_ci.pViewportState      = &viewport_state;
-        graphics_pipeline_ci.pRasterizationState = &rasterization_state;
-        graphics_pipeline_ci.pMultisampleState   = &multisample_state;
-        graphics_pipeline_ci.pDepthStencilState  = &depth_stencil_state;
-        graphics_pipeline_ci.pColorBlendState    = &color_blend_state;
-        graphics_pipeline_ci.pDynamicState       = &dynamic_state;
-        graphics_pipeline_ci.layout              = m_fullscreen_pipeline.Layout;
+        vk::GraphicsPipelineCreateInfo pipeline_ci{};
+        pipeline_ci.setStages(shader_stages);
+        pipeline_ci.pVertexInputState   = &vertex_input_ci;
+        pipeline_ci.pInputAssemblyState = &input_assembly_state;
+        pipeline_ci.pViewportState      = &viewport_state;
+        pipeline_ci.pRasterizationState = &rasterization_state;
+        pipeline_ci.pMultisampleState   = &multisample_state;
+        pipeline_ci.pDepthStencilState  = &depth_stencil_state;
+        pipeline_ci.pColorBlendState    = &color_blend_state;
+        pipeline_ci.pDynamicState       = &dynamic_state;
+        pipeline_ci.layout              = m_fullscreen_pipeline.Layout;
 
         vk::PipelineRenderingCreateInfo pipeline_rendering_create_info{{}, globals::kColorAttachmentFormat, globals::kDepthStencilAttachmentFormat};
-        graphics_pipeline_ci.pNext = &pipeline_rendering_create_info;
+        pipeline_ci.pNext = &pipeline_rendering_create_info;
 
-        auto result = m_device_context.Device.createGraphicsPipeline(nullptr, graphics_pipeline_ci);
+        const auto result = m_device_context.Device.createGraphicsPipeline(nullptr, pipeline_ci);
         check(result.result == vk::Result::eSuccess, "Failed to create graphics pipeline!");
 
         m_fullscreen_pipeline.Handle = result.value;
+    }
+
+    void Renderer::create_compute_pipeline() {
+        vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
+        pipeline_layout_ci.setLayoutCount = 0;
+        pipeline_layout_ci.pSetLayouts    = nullptr;
+
+        m_compute_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
+        check(m_compute_pipeline.Layout != nullptr);
+
+        ShaderModule *simple_compute_module = m_shader_registry->GetModule("simple-compute.slang");
+        vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, simple_compute_module->Module, globals::kComputeEntryFunctionName.data()};
+
+        vk::ComputePipelineCreateInfo pipeline_ci{};
+        pipeline_ci.layout = m_compute_pipeline.Layout;
+        pipeline_ci.stage = shader_stage_ci;
+
+        const auto result = m_device_context.Device.createComputePipeline(nullptr, pipeline_ci);
+        check(result.result == vk::Result::eSuccess, "Failed to create compute pipeline!");
+        m_compute_pipeline.Handle = result.value;
     }
 
     void Renderer::fullscreen_render_pass() {
@@ -135,7 +160,6 @@ namespace vkdemo {
         cb.setViewport(0, {viewport});
         cb.setScissor(0, {scissor});
 
-        // todo encapsulate this more neatly into a RenderPass?
         auto &main_color_attachment = *m_context->MainColorAttachments[m_frame_context->Index];
         main_color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
         vk::RenderingAttachmentInfo color_attachment_info{};
@@ -157,5 +181,7 @@ namespace vkdemo {
 
         cb.endRendering();
     }
+
+    void Renderer::simple_compute_pass() {}
 
 } // namespace vkdemo

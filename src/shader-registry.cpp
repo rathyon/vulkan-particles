@@ -50,8 +50,14 @@ namespace vkdemo {
     void ShaderRegistry::LoadShaders() {
         for (const auto &shader_filename: kShaderFilenames) {
             ShaderModule                slang_module{};
-            std::filesystem::path       shader_filepath = std::filesystem::path{kShaderFolder} / shader_filename;
+            std::filesystem::path       shader_filepath = std::filesystem::path(kShaderFolder) / shader_filename;
             Slang::ComPtr<slang::IBlob> diagnostics_blob;
+
+            try {
+                check(std::filesystem::exists(shader_filepath), std::format("Shader {} is missing!", shader_filename));
+            } catch (const std::exception& exception) {
+                std::cerr << "Error while checking if shader file exists: " << exception.what() << std::endl;
+            }
 
             slang_module.SlangModule = m_vulkan_session->loadModuleFromSource(shader_filename.c_str(), shader_filepath.string().c_str(), nullptr, diagnostics_blob.writeRef());
             print_diagnostics(diagnostics_blob, shader_filename);

@@ -156,9 +156,14 @@ namespace vkdemo {
             m_graphics_fences[i]           = m_device.createFence(fence_create_info);
             m_compute_fences[i]            = m_device.createFence(fence_create_info);
             m_image_acquired_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
+            m_compute_ready_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
+            m_compute_complete_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
 
             check(m_graphics_fences[i] != nullptr, "Failed to create fence");
+            check(m_compute_fences[i] != nullptr, "Failed to create fence");
             check(m_image_acquired_semaphores[i] != nullptr, "Failed to create semaphore");
+            check(m_compute_ready_semaphores[i] != nullptr, "Failed to create semaphore");
+            check(m_compute_complete_semaphores[i] != nullptr, "Failed to create semaphore");
         }
 
         for (size_t i = 0; i < m_swapchain_images.size(); ++i) {
