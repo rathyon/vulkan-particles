@@ -6,7 +6,7 @@
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.hpp>
 
-#include "vk-util.hpp"
+#include "vma-usage.hpp"
 
 namespace vkdemo {
     class DeviceContext {
@@ -23,17 +23,17 @@ namespace vkdemo {
         uint32_t GraphicsQueueFamily{};
         uint32_t PresentQueueFamily{};
         uint32_t ComputeQueueFamily{};
-        uint32_t DedicatedTransferQueueFamily{};
+        uint32_t TransferQueueFamily{};
 
         vk::Queue GraphicsQueue;
         vk::Queue PresentQueue;
         vk::Queue ComputeQueue;
-        vk::Queue DedicatedTransferQueue;
+        vk::Queue TransferQueue;
 
-        VmaAllocator   VmaAllocator{nullptr};
+        VmaAllocator VmaAllocator{nullptr};
 
     private:
-        static constexpr uint32_t          kVulkanAPIVersion    = vk::ApiVersion14;
+        static constexpr uint32_t kVulkanAPIVersion = vk::ApiVersion14;
 
         const std::vector<const char *> kRequiredLayers             = {"VK_LAYER_KHRONOS_validation"};
         const std::vector<const char *> kRequiredInstanceExtensions = {vk::EXTDebugUtilsExtensionName};
@@ -50,7 +50,6 @@ namespace vkdemo {
         [[nodiscard]] bool check_device_extension_support(const vk::PhysicalDevice &physical_device);
         void               create_logical_device();
         void               select_queue_families();
-        [[nodiscard]] bool select_transfer_queue_family(const std::vector<vk::QueueFamilyProperties> &properties_list);
         void               read_physical_device_properties();
         void               initialize_vma();
 

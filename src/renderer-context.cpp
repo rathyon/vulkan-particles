@@ -2,7 +2,6 @@
 
 #include <SDL3/SDL_vulkan.h>
 #include "device-context.hpp"
-#include "util.hpp"
 #include "window.hpp"
 
 namespace vkdemo {
@@ -10,33 +9,30 @@ namespace vkdemo {
     RendererContext::RendererContext(const DeviceContext &device_context) : m_device_context(device_context), m_device(m_device_context.Device) {}
 
     RendererContext::~RendererContext() {
-        for (const auto &image_desc: m_swapchain_images) {
-            m_device_context.Device.destroyImageView(image_desc.View);
-            m_device_context.Device.destroyImage(image_desc.Image);
-        }
         m_swapchain_images.clear();
         SDL_Vulkan_DestroySurface(m_device_context.Instance, m_surface, nullptr);
 
         m_device_context.Device.destroySwapchainKHR(m_swapchain);
 
-        m_device.destroyImageView(DepthStencilAttachment.View);
-        vmaDestroyImage(m_device_context.VmaAllocator, DepthStencilAttachment.Image, DepthStencilAttachment.Allocation);
-
-        for (const auto &attachment: MainColorAttachments) {
-            m_device.destroyImageView(attachment.View);
-            vmaDestroyImage(m_device_context.VmaAllocator, attachment.Image, attachment.Allocation);
+        // Let unique_ptr dispose these (out of scope destruction)
+        DepthStencilAttachment = nullptr;
+        for (auto &attachment: MainColorAttachments) {
+            attachment = nullptr;
         }
 
         m_device.destroyCommandPool(m_graphics_command_pool);
+        m_device.destroyCommandPool(m_compute_command_pool);
 
+        // render complete semaphores can have a different count from the other semaphores
         for (const auto &semaphore: m_render_complete_semaphores) {
             m_device.destroySemaphore(semaphore);
         }
-        for (const auto &semaphore: m_image_acquired_semaphores) {
-            m_device.destroySemaphore(semaphore);
-        }
-        for (const auto &fence: m_fences) {
-            m_device.destroyFence(fence);
+
+        for (int i = 0; i < globals::kFramesInFlight; ++i) {
+            m_device.destroySemaphore(m_image_acquired_semaphores[i]);
+            m_device.destroySemaphore(m_compute_ready_semaphores[i]);
+            m_device.destroySemaphore(m_compute_complete_semaphores[i]);
+            m_device.destroyFence(m_graphics_fences[i]);
         }
     }
 
@@ -47,17 +43,18 @@ namespace vkdemo {
         create_attachments();
 
         for (size_t i = 0; i < m_frame_contexts.size(); ++i) {
-            m_frame_contexts[i].Index                 = i;
-            m_frame_contexts[i].GraphicsCommandBuffer = m_graphics_command_buffers[i];
+            m_frame_contexts[i].Index      = i;
+            m_frame_contexts[i].GraphicsCB = m_graphics_command_buffers[i];
+            m_frame_contexts[i].ComputeCB  = m_compute_command_buffers[i];
         }
     }
 
-    FrameContext &RendererContext::BeginFrame() {
+    FrameContext *RendererContext::BeginFrame() {
         static constexpr auto kTimeout = std::numeric_limits<uint64_t>::max();
 
         // Wait for frame completion
-        check(m_device.waitForFences(m_fences[m_frame_index], true, kTimeout) == vk::Result::eSuccess, "Failed to wait for fences");
-        m_device.resetFences(m_fences[m_frame_index]);
+        check(m_device.waitForFences(m_graphics_fences[m_frame_index], true, kTimeout) == vk::Result::eSuccess, "Failed to wait for fences");
+        m_device.resetFences(m_graphics_fences[m_frame_index]);
 
         vk::Result acquire_result = m_device.acquireNextImageKHR(m_swapchain, kTimeout, m_image_acquired_semaphores[m_frame_index], nullptr, &m_swapchain_image_index);
 
@@ -65,26 +62,25 @@ namespace vkdemo {
             throw std::runtime_error(std::format("Failed to acquire next swapchain image! Code: {}", vk::to_string(acquire_result)));
         }
 
-        auto &cb = m_frame_contexts[m_frame_index].GraphicsCommandBuffer;
+        auto &cb = m_frame_contexts[m_frame_index].GraphicsCB;
         cb       = m_graphics_command_buffers[m_frame_index];
 
         cb.reset();
         cb.begin(vk::CommandBufferBeginInfo{});
 
-        // return a copy of the new frame context
-        return m_frame_contexts[m_frame_index];
+        return &m_frame_contexts[m_frame_index];
     }
 
     void RendererContext::EndFrame() {
         // Copy contents from main color attachment to swapchain image.
         // Because the swapchain image may be of a different format or resolution, blit is used to resolve these differences.
         const auto &frame_context    = m_frame_contexts[m_frame_index];
-        const auto &cb               = frame_context.GraphicsCommandBuffer;
-        auto       &color_attachment = MainColorAttachments[m_frame_index];
-        auto       &swapchain_images = m_swapchain_images[m_swapchain_image_index];
+        const auto &cb               = frame_context.GraphicsCB;
+        auto       &color_attachment = *MainColorAttachments[m_frame_index];
+        auto       &swapchain_image  = *m_swapchain_images[m_swapchain_image_index];
 
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
-        swapchain_images.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
+        swapchain_image.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
 
         // Define the regions to blit (we will blit the whole swapchain image)
         const vk::Offset3D src_start{0, 0, 0};
@@ -94,9 +90,9 @@ namespace vkdemo {
         const vk::Offset3D dst_end{globals::kWindowSize.x, globals::kWindowSize.y, 1};
 
         vk::BlitImageInfo2 blit_info{};
-        blit_info.srcImage       = color_attachment.Image;
+        blit_info.srcImage       = color_attachment.Handle;
         blit_info.srcImageLayout = vk::ImageLayout::eTransferSrcOptimal;
-        blit_info.dstImage       = swapchain_images.Image;
+        blit_info.dstImage       = swapchain_image.Handle;
         blit_info.dstImageLayout = vk::ImageLayout::eTransferDstOptimal;
         blit_info.filter         = vk::Filter::eNearest;
 
@@ -107,7 +103,7 @@ namespace vkdemo {
         cb.blitImage2(blit_info);
 
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
-        swapchain_images.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
+        swapchain_image.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
 
         // Finish command buffer recording
         cb.end();
@@ -116,7 +112,7 @@ namespace vkdemo {
         // Wait for final write into color attachment
         std::vector<vk::PipelineStageFlags> wait_stage = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
         vk::SubmitInfo                      submit_info{{m_image_acquired_semaphores[m_frame_index]}, wait_stage, {cb}, {m_render_complete_semaphores[m_swapchain_image_index]}};
-        m_device_context.GraphicsQueue.submit({submit_info}, m_fences[m_frame_index]);
+        m_device_context.GraphicsQueue.submit({submit_info}, m_graphics_fences[m_frame_index]);
 
         // Present the swapchain via the present queue
         // By default VulkanHPP throws exception when result isn't Success. But throwing/catching exceptions isn't desired here so the C API is used.
@@ -128,18 +124,27 @@ namespace vkdemo {
     }
 
     void RendererContext::create_command_buffers() {
-        vk::CommandPoolCreateInfo graphics_command_pool_ci{};
-        graphics_command_pool_ci.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-        graphics_command_pool_ci.queueFamilyIndex = m_device_context.GraphicsQueueFamily;
+        // Create graphics buffers
+        vk::CommandPoolCreateInfo command_pool_ci{};
+        command_pool_ci.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+        command_pool_ci.queueFamilyIndex = m_device_context.GraphicsQueueFamily;
 
-        m_graphics_command_pool = m_device.createCommandPool(graphics_command_pool_ci);
+        m_graphics_command_pool = m_device.createCommandPool(command_pool_ci);
         check(m_graphics_command_pool != nullptr, "Failed to create graphics command pool");
 
-        vk::CommandBufferAllocateInfo graphics_command_buffer_ai{};
-        graphics_command_buffer_ai.commandPool        = m_graphics_command_pool;
-        graphics_command_buffer_ai.commandBufferCount = globals::kFramesInFlight;
+        vk::CommandBufferAllocateInfo command_buffer_ai{};
+        command_buffer_ai.commandPool        = m_graphics_command_pool;
+        command_buffer_ai.commandBufferCount = globals::kFramesInFlight;
 
-        check(m_device.allocateCommandBuffers(&graphics_command_buffer_ai, m_graphics_command_buffers.data()));
+        check(m_device.allocateCommandBuffers(&command_buffer_ai, m_graphics_command_buffers.data()), "Failed to allocate graphics command buffers");
+
+        // Create compute buffers
+        command_pool_ci.queueFamilyIndex = m_device_context.ComputeQueueFamily;
+        m_compute_command_pool           = m_device.createCommandPool(command_pool_ci);
+        check(m_compute_command_pool != nullptr, "Failed to create compute command pool");
+
+        command_buffer_ai.commandPool = m_compute_command_pool;
+        check(m_device.allocateCommandBuffers(&command_buffer_ai, m_compute_command_buffers.data()), "Failed to allocate compute command buffers");
     }
 
     void RendererContext::create_sync_objects() {
@@ -147,13 +152,12 @@ namespace vkdemo {
         fence_create_info.flags = vk::FenceCreateFlagBits::eSignaled;
 
         vk::SemaphoreCreateInfo semaphore_create_info{};
-
-        // todo return to this later on once the swapchain image is no longer the main render target
         for (uint8_t i = 0; i < globals::kFramesInFlight; ++i) {
-            m_fences[i]                    = m_device.createFence(fence_create_info);
+            m_graphics_fences[i]           = m_device.createFence(fence_create_info);
+            m_compute_fences[i]            = m_device.createFence(fence_create_info);
             m_image_acquired_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
 
-            check(m_fences[i] != nullptr, "Failed to create fence");
+            check(m_graphics_fences[i] != nullptr, "Failed to create fence");
             check(m_image_acquired_semaphores[i] != nullptr, "Failed to create semaphore");
         }
 
@@ -189,17 +193,21 @@ namespace vkdemo {
         color_view_create_info.subresourceRange.levelCount = 1;
         color_view_create_info.subresourceRange.layerCount = 1;
 
-        for (auto &attachment: MainColorAttachments) {
-            check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&color_create_info), &alloc_info, reinterpret_cast<VkImage *>(&attachment.Image),
+        for (auto &attachment_ptr: MainColorAttachments) {
+            attachment_ptr   = std::make_unique<Image>(m_device_context);
+            auto &attachment = *attachment_ptr;
+
+            check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&color_create_info), &alloc_info, reinterpret_cast<VkImage *>(&attachment.Handle),
                                  &attachment.Allocation, nullptr),
                   "Failed to create color attachment");
 
-            color_view_create_info.image = attachment.Image;
+            color_view_create_info.image = attachment.Handle;
             attachment.View              = m_device.createImageView(color_view_create_info);
             attachment.Aspect            = color_view_create_info.subresourceRange.aspectMask;
         }
 
         // Create depth attachment
+        DepthStencilAttachment = std::make_unique<Image>(m_device_context);
         vk::ImageCreateInfo depth_create_info{};
         depth_create_info.imageType     = vk::ImageType::e2D;
         depth_create_info.format        = globals::kDepthStencilAttachmentFormat;
@@ -211,20 +219,20 @@ namespace vkdemo {
         depth_create_info.usage         = vk::ImageUsageFlagBits::eDepthStencilAttachment;
         depth_create_info.initialLayout = vk::ImageLayout::eUndefined;
 
-        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&depth_create_info), &alloc_info, reinterpret_cast<VkImage *>(&DepthStencilAttachment.Image),
-                             &DepthStencilAttachment.Allocation, nullptr),
+        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&depth_create_info), &alloc_info, reinterpret_cast<VkImage *>(&DepthStencilAttachment->Handle),
+                             &DepthStencilAttachment->Allocation, nullptr),
               "Failed to create depth attachment");
 
         vk::ImageViewCreateInfo depth_view_create_info{};
-        depth_view_create_info.image                       = DepthStencilAttachment.Image;
+        depth_view_create_info.image                       = DepthStencilAttachment->Handle;
         depth_view_create_info.viewType                    = vk::ImageViewType::e2D;
         depth_view_create_info.format                      = depth_create_info.format;
         depth_view_create_info.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
         depth_view_create_info.subresourceRange.levelCount = 1;
         depth_view_create_info.subresourceRange.layerCount = 1;
 
-        DepthStencilAttachment.View   = m_device.createImageView(depth_view_create_info);
-        DepthStencilAttachment.Aspect = depth_view_create_info.subresourceRange.aspectMask;
+        DepthStencilAttachment->View   = m_device.createImageView(depth_view_create_info);
+        DepthStencilAttachment->Aspect = depth_view_create_info.subresourceRange.aspectMask;
     }
 
     void RendererContext::create_swapchain(const Window &window) {
@@ -259,9 +267,12 @@ namespace vkdemo {
         image_view_create_info.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
         for (size_t i = 0; i < swapchain_images.size(); ++i) {
-            image_view_create_info.image = m_swapchain_images[i].Image = swapchain_images[i];
-            m_swapchain_images[i].View                                 = m_device.createImageView(image_view_create_info);
-            m_swapchain_images[i].Aspect                               = image_view_create_info.subresourceRange.aspectMask;
+            m_swapchain_images[i]         = std::make_unique<Image>(m_device_context);
+            m_swapchain_images[i]->Handle = swapchain_images[i];
+
+            image_view_create_info.image = m_swapchain_images[i]->Handle = swapchain_images[i];
+            m_swapchain_images[i]->View                                  = m_device.createImageView(image_view_create_info);
+            m_swapchain_images[i]->Aspect                                = image_view_create_info.subresourceRange.aspectMask;
         }
     }
 } // namespace vkdemo

@@ -25,9 +25,14 @@ namespace vkdemo {
         void create_pipelines();
         void create_fullscreen_pipeline();
 
+        void fullscreen_render_pass();
+        // void simple_compute_pass();
+
         DeviceContext                    m_device_context{};
         std::unique_ptr<RendererContext> m_context;
         std::unique_ptr<ShaderRegistry>  m_shader_registry;
+
+        FrameContext *m_frame_context = nullptr;
 
         Pipeline m_fullscreen_pipeline{};
     };

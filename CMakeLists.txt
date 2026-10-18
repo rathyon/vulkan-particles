@@ -28,6 +28,12 @@ add_executable(vulkan_particles
         src/renderer.cpp
         src/Renderer.hpp
         src/vk-util.hpp
+        src/image.cpp
+        src/image.hpp
+        src/buffer.cpp
+        src/buffer.hpp
+        src/texture.cpp
+        src/texture.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

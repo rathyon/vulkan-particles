@@ -24,36 +24,9 @@ namespace vkdemo {
         bool stop = false;
 
         while (!stop) {
-            FrameContext frame_context = m_context->BeginFrame();
+            m_frame_context = m_context->BeginFrame();
 
-            const auto &cb = frame_context.GraphicsCommandBuffer;
-
-            vk::Viewport viewport{ {}, {}, globals::kRenderExtent2D.width, globals::kRenderExtent3D.height, 0, 1};
-            vk::Rect2D scissor{{}, globals::kRenderExtent2D};
-            cb.setViewport(0, {viewport});
-            cb.setScissor(0, {scissor});
-
-            // todo encapsulate this more neatly into a RenderPass?
-            auto &main_color_attachment = m_context->MainColorAttachments[frame_context.Index];
-            main_color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
-            vk::RenderingAttachmentInfo color_attachment_info{};
-            color_attachment_info.imageView               = main_color_attachment.View;
-            color_attachment_info.imageLayout             = vk::ImageLayout::eColorAttachmentOptimal;
-            color_attachment_info.loadOp                  = vk::AttachmentLoadOp::eClear;
-            color_attachment_info.clearValue.color        = vk::ClearColorValue{0, 0, 0, 0};
-            color_attachment_info.storeOp                 = vk::AttachmentStoreOp::eStore;
-
-            vk::RenderingInfo rendering_info{};
-            rendering_info.renderArea.extent = globals::kRenderExtent2D;
-            rendering_info.layerCount = 1;
-            rendering_info.setColorAttachments({color_attachment_info});
-
-            cb.beginRendering(rendering_info);
-
-            cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Handle);
-            cb.draw(3, 1, 0, 0);
-
-            cb.endRendering();
+            fullscreen_render_pass();
 
             m_context->EndFrame();
         }
@@ -62,6 +35,9 @@ namespace vkdemo {
     void Renderer::create_pipelines() { create_fullscreen_pipeline(); }
 
     void Renderer::create_fullscreen_pipeline() {
+        // This fullscreen shader uses a technique described by Sascha Willems:
+        // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
+
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
         pipeline_layout_ci.setLayoutCount = 0;
         pipeline_layout_ci.pSetLayouts    = nullptr;
@@ -90,16 +66,16 @@ namespace vkdemo {
         viewport_state.viewportCount = 1;
         viewport_state.scissorCount  = 1;
 
-        // .DepthTestEnable = false,
-
         vk::PipelineRasterizationStateCreateInfo rasterization_state{};
         rasterization_state.depthClampEnable        = vk::False;
         rasterization_state.rasterizerDiscardEnable = vk::False;
         rasterization_state.polygonMode             = vk::PolygonMode::eFill;
         rasterization_state.lineWidth               = 1.0f;
-        rasterization_state.cullMode                = vk::CullModeFlagBits::eFront;
-        rasterization_state.frontFace               = vk::FrontFace::eCounterClockwise;
         rasterization_state.depthBiasEnable         = vk::False;
+
+        // Culling and FrontFace are setup specifically for the geometry-less "fake fullscreen quad" technique
+        rasterization_state.cullMode  = vk::CullModeFlagBits::eFront;
+        rasterization_state.frontFace = vk::FrontFace::eCounterClockwise;
 
         vk::PipelineMultisampleStateCreateInfo multisample_state{};
         multisample_state.rasterizationSamples = vk::SampleCountFlagBits::e1;
@@ -150,4 +126,36 @@ namespace vkdemo {
 
         m_fullscreen_pipeline.Handle = result.value;
     }
+
+    void Renderer::fullscreen_render_pass() {
+        const auto &cb = m_frame_context->GraphicsCB;
+
+        vk::Viewport viewport{{}, {}, globals::kRenderExtent2D.width, globals::kRenderExtent3D.height, 0, 1};
+        vk::Rect2D   scissor{{}, globals::kRenderExtent2D};
+        cb.setViewport(0, {viewport});
+        cb.setScissor(0, {scissor});
+
+        // todo encapsulate this more neatly into a RenderPass?
+        auto &main_color_attachment = *m_context->MainColorAttachments[m_frame_context->Index];
+        main_color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
+        vk::RenderingAttachmentInfo color_attachment_info{};
+        color_attachment_info.imageView        = main_color_attachment.View;
+        color_attachment_info.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
+        color_attachment_info.loadOp           = vk::AttachmentLoadOp::eClear;
+        color_attachment_info.clearValue.color = vk::ClearColorValue{0, 0, 0, 0};
+        color_attachment_info.storeOp          = vk::AttachmentStoreOp::eStore;
+
+        vk::RenderingInfo rendering_info{};
+        rendering_info.renderArea.extent = globals::kRenderExtent2D;
+        rendering_info.layerCount        = 1;
+        rendering_info.setColorAttachments({color_attachment_info});
+
+        cb.beginRendering(rendering_info);
+
+        cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Handle);
+        cb.draw(3, 1, 0, 0);
+
+        cb.endRendering();
+    }
+
 } // namespace vkdemo

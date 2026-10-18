@@ -126,18 +126,6 @@ namespace vkdemo {
                 std::cout << "Queue Count: " << family_properties.queueFamilyProperties.queueCount << " Flags: " << vk::to_string(family_properties.queueFamilyProperties.queueFlags) << "\n";
             }
         }
-
-        // Select queue families
-        // Just grab the first compatible queue family for Graphics
-        uint32_t queue_family_index = 0;
-        for (const auto &family_properties: queue_families_properties) {
-            if (family_properties.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                GraphicsQueueFamily = queue_family_index;
-                break;
-            }
-
-            ++queue_family_index;
-        }
     }
 
     bool DeviceContext::check_device_extension_support(const vk::PhysicalDevice &physical_device) {
@@ -155,80 +143,71 @@ namespace vkdemo {
     void DeviceContext::select_queue_families() {
         const std::vector<vk::QueueFamilyProperties> properties_list = PhysicalDevice.getQueueFamilyProperties();
 
-        // Initialize family indices with total count to compare if it was found
-        GraphicsQueueFamily = PresentQueueFamily = properties_list.size();
+        // Initialize family indices with max uint value to represent null/none
+        static constexpr uint32_t kFamilyNone = std::numeric_limits<uint32_t>::max();
+        GraphicsQueueFamily = ComputeQueueFamily = PresentQueueFamily = TransferQueueFamily = kFamilyNone;
 
-        // Select graphics queue family
-        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
-            const vk::QueueFamilyProperties properties = *property_it;
+        // Lambda function to help select queue families
+        auto find_family = [&properties_list](const vk::QueueFlags flags, const vk::QueueFlags exclude_flags = {}) {
+            for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
+                const vk::QueueFamilyProperties properties = *property_it;
+                if (properties.queueCount <= 0)
+                    continue;
 
-            // Select the first one that has the Graphics and Compute flags
-            if (properties.queueCount > 0 && properties.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute)) {
-                GraphicsQueueFamily = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
-                ComputeQueueFamily  = GraphicsQueueFamily;
-                break;
+                if (properties.queueFlags & (flags) && !(properties.queueFlags & exclude_flags)) {
+                    return static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
+                }
             }
+            return kFamilyNone;
+        };
+
+        // Select graphics queue family (select the first one that appears) it should also include Compute
+        GraphicsQueueFamily = find_family(vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
+        check(GraphicsQueueFamily != kFamilyNone, "Failed to find Graphics queue family!");
+
+        // Select compute queue family. A family that supports Compute but not Graphics is preferred (dedicated Compute)
+        ComputeQueueFamily = find_family(vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics);
+        if (ComputeQueueFamily == kFamilyNone) {
+            std::cout << "Dedicated compute queue family not found. Using graphics family." << std::endl;
+            ComputeQueueFamily = GraphicsQueueFamily;
         }
+        check(ComputeQueueFamily != kFamilyNone, "Failed to find Compute queue family!");
+
+        // Select optimal transfer queue if it exists.
+        // Find a Transfer queue. We try from best case to worst and by the one with the least amount of queues.
+        // Best case: If it supports Transfer but not Graphics and Compute
+        TransferQueueFamily = find_family(vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
+        // Second-best case: If it supports Transfer but not Graphics
+        TransferQueueFamily = TransferQueueFamily != kFamilyNone ? TransferQueueFamily : find_family(vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics);
+        // Fallback: use the graphics family. It is guaranteed to support transfer by the spec.
+        TransferQueueFamily = TransferQueueFamily != kFamilyNone ? TransferQueueFamily : GraphicsQueueFamily;
+        check(TransferQueueFamily != kFamilyNone, "Failed to find Present queue family.");
 
         // Select present queue family
         for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
             const vk::QueueFamilyProperties properties = *property_it;
+            if (properties.queueCount <= 0)
+                continue;
 
             const uint32_t   family_index    = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
             const vk::Bool32 present_support = SDL_Vulkan_GetPresentationSupport(Instance, PhysicalDevice, family_index);
-            if (properties.queueCount > 0 && present_support) {
+            if (present_support) {
                 PresentQueueFamily = family_index;
                 break;
             }
         }
-
-        // Check if families were found
-        check(GraphicsQueueFamily < properties_list.size(), "Failed to find Graphics queue family.");
-        check(ComputeQueueFamily < properties_list.size(), "Failed to find Compute queue family.");
-        check(PresentQueueFamily < properties_list.size(), "Failed to find Present queue family.");
-
-        // Select optimal transfer queue if it exists.
-        // Transfer queue does not need to be checked, because it is guaranteed to exist if a graphics queue exists, as per the spec.
-        if (select_transfer_queue_family(properties_list) == false) {
-            DedicatedTransferQueueFamily = GraphicsQueueFamily;
-        }
+        check(PresentQueueFamily != kFamilyNone, "Failed to find Present queue family.");
 
         std::cout << "Selected queue families:\n"
                   << "Graphics: " << GraphicsQueueFamily << "\nCompute: " << ComputeQueueFamily << "\nPresent: " << PresentQueueFamily
-                  << "\nDedicated Transfer: " << DedicatedTransferQueueFamily << std::endl;
-    }
-
-    bool DeviceContext::select_transfer_queue_family(const std::vector<vk::QueueFamilyProperties> &properties_list) {
-        // Find a Transfer queue. We try from best case to worst and by the one with the least amount of queues.
-        // Best case: If it supports Transfer but not Graphics and Compute
-        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
-            const vk::QueueFamilyProperties properties = *property_it;
-
-            if (properties.queueCount > 0 && properties.queueFlags & vk::QueueFlagBits::eTransfer && static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eGraphics) == false &&
-                static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eCompute) == false) {
-                DedicatedTransferQueueFamily = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
-                return true;
-            }
-        }
-
-        // Second-best case: If it supports Transfer but not Graphics
-        for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
-            const vk::QueueFamilyProperties properties = *property_it;
-
-            if (properties.queueCount > 0 && properties.queueFlags & vk::QueueFlagBits::eTransfer && static_cast<bool>(properties.queueFlags & vk::QueueFlagBits::eGraphics) == false) {
-                DedicatedTransferQueueFamily = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
-                return true;
-            }
-        }
-
-        return false;
+                  << "\nTransfer: " << TransferQueueFamily << std::endl;
     }
 
     void DeviceContext::create_logical_device() {
         select_queue_families();
 
         // Create a set of unique family indices (duplicates are discarded)
-        const std::unordered_set unique_queue_families{GraphicsQueueFamily, PresentQueueFamily, ComputeQueueFamily, DedicatedTransferQueueFamily};
+        const std::unordered_set unique_queue_families{GraphicsQueueFamily, PresentQueueFamily, ComputeQueueFamily, TransferQueueFamily};
         const std::vector         all_queue_priority{1.0f};
 
         std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
@@ -269,7 +248,7 @@ namespace vkdemo {
         GraphicsQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, GraphicsQueueFamily});
         PresentQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, PresentQueueFamily});
         ComputeQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, ComputeQueueFamily});
-        DedicatedTransferQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, DedicatedTransferQueueFamily});
+        TransferQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, TransferQueueFamily});
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(Device);
     }
