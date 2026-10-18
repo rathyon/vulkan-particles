@@ -1,8 +1,9 @@
 #ifndef GLOBALS_HPP
 #define GLOBALS_HPP
 
-#include <string_view>
 #include <glm/vec2.hpp>
+#include <string_view>
+#include <vulkan/vulkan.hpp>
 
 namespace vkdemo::globals {
     static constexpr std::string_view kApplicationName = "Vulkan Demo";
@@ -13,6 +14,8 @@ namespace vkdemo::globals {
     static constexpr bool             kPrintDeviceMemoryProperties{true};
     static constexpr bool             kVSyncEnabled{false};
     static constexpr uint8_t          kFramesInFlight{2};
+    static constexpr vk::Format       kColorAttachmentFormat        = vk::Format::eB8G8R8A8Unorm;
+    static constexpr vk::Format       kDepthStencilAttachmentFormat = vk::Format::eD32SfloatS8Uint;
 
 } // namespace vkdemo::globals
 

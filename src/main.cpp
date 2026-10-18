@@ -1,24 +1,16 @@
-#include "device-context.hpp"
 #include "globals.hpp"
-#include "renderer-context.hpp"
-#include "shader-library.hpp"
+
 #include "window.hpp"
+#include "renderer.hpp"
 
 using namespace vkdemo;
 
 int main() {
 
     Window window{globals::kWindowSize.x, globals::kWindowSize.y};
-    DeviceContext device_context{};
 
-    device_context.Initialize(window);
-
-    RendererContext renderer_context{device_context};
-    renderer_context.Initialize();
-
-    ShaderLibrary shader_library{device_context};
-    shader_library.Initialize();
-    shader_library.LoadShaders();
+    Renderer renderer{};
+    renderer.Initialize(window);
 
     // todo enter render loop here
 

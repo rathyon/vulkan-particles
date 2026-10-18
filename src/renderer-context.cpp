@@ -79,7 +79,7 @@ namespace vkdemo {
         // Create color attachments
         vk::ImageCreateInfo color_create_info{};
         color_create_info.imageType   = vk::ImageType::e2D;
-        color_create_info.format      = vk::Format::eB8G8R8A8Unorm;
+        color_create_info.format      = globals::kColorAttachmentFormat;
         color_create_info.extent      = m_render_extent;
         color_create_info.mipLevels   = 1;
         color_create_info.arrayLayers = 1;
@@ -109,7 +109,7 @@ namespace vkdemo {
         // Create depth attachment
         vk::ImageCreateInfo depth_create_info{};
         depth_create_info.imageType     = vk::ImageType::e2D;
-        depth_create_info.format        = vk::Format::eD32SfloatS8Uint;
+        depth_create_info.format        = globals::kDepthStencilAttachmentFormat;
         depth_create_info.extent        = m_render_extent;
         depth_create_info.mipLevels     = 1;
         depth_create_info.arrayLayers   = 1;

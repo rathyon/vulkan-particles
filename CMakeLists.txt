@@ -23,8 +23,10 @@ add_executable(vulkan_particles
         src/vma-usage.hpp
         src/renderer-context.cpp
         src/renderer-context.hpp
-        src/shader-library.cpp
-        src/shader-library.hpp
+        src/shader-registry.cpp
+        src/shader-registry.hpp
+        src/renderer.cpp
+        src/Renderer.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

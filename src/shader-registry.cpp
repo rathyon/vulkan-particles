@@ -1,4 +1,4 @@
-#include "shader-library.hpp"
+#include "shader-registry.hpp"
 
 #include "device-context.hpp"
 #include "utils.hpp"
@@ -8,15 +8,15 @@
 #include <ranges>
 
 namespace vkdemo {
-    ShaderLibrary::ShaderLibrary(const DeviceContext &device_context) : m_device_context(device_context) {}
+    ShaderRegistry::ShaderRegistry(const DeviceContext &device_context) : m_device_context(device_context) {}
 
-    ShaderLibrary::~ShaderLibrary() {
+    ShaderRegistry::~ShaderRegistry() {
         for (const auto& module : m_shader_modules | std::views::values) {
             m_device_context.Device.destroyShaderModule(module.Module);
         }
     }
 
-    void ShaderLibrary::Initialize() {
+    void ShaderRegistry::Initialize() {
         slang::createGlobalSession(m_slang_global_session.writeRef());
 
         // Create the slang session to compile shaders
@@ -40,7 +40,14 @@ namespace vkdemo {
         check(m_slang_global_session->createSession(session_desc, m_vulkan_session.writeRef()) >= 0, "Failed to create vulkan slang session");
     }
 
-    void ShaderLibrary::LoadShaders() {
+    ShaderModule *ShaderRegistry::GetModule(const std::string &name) {
+        if (m_shader_modules.contains(name) == false)
+            return nullptr;
+
+        return &m_shader_modules.at(name);
+    }
+
+    void ShaderRegistry::LoadShaders() {
         for (const auto &shader_filename: kShaderFilenames) {
             ShaderModule                slang_module{};
             std::filesystem::path       shader_filepath = std::filesystem::path{kShaderFolder} / shader_filename;
@@ -50,7 +57,11 @@ namespace vkdemo {
             print_diagnostics(diagnostics_blob, shader_filename);
             check(slang_module.SlangModule != nullptr, "Failed to load module for " + shader_filename);
 
-            SlangResult result = slang_module.SlangModule->getTargetCode(0, slang_module.SPIRV.writeRef(), diagnostics_blob.writeRef());
+            SlangResult result = slang_module.SlangModule->link(slang_module.LinkedComponent.writeRef(), diagnostics_blob.writeRef());
+            print_diagnostics(diagnostics_blob, shader_filename);
+            check(result >= 0, "Failed to link components for " + shader_filename);
+
+            result = slang_module.LinkedComponent->getTargetCode(0, slang_module.SPIRV.writeRef(), diagnostics_blob.writeRef());
             print_diagnostics(diagnostics_blob, shader_filename);
             check(result >= 0, "Failed to get target code for " + shader_filename);
 
@@ -66,7 +77,7 @@ namespace vkdemo {
         }
     }
 
-    void ShaderLibrary::print_diagnostics(const Slang::ComPtr<slang::IBlob> &blob, const std::string_view shader_name) {
+    void ShaderRegistry::print_diagnostics(const Slang::ComPtr<slang::IBlob> &blob, const std::string_view shader_name) {
         if (blob != nullptr) {
             const std::string message(static_cast<const char *>(blob->getBufferPointer()));
             std::cout << std::format("Slang diagnostic for shader program {}:\n{}", shader_name, message);

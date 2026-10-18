@@ -1,5 +1,5 @@
-#ifndef SHADER_LIBRARY_HPP
-#define SHADER_LIBRARY_HPP
+#ifndef SHADER_REGISTRY_HPP
+#define SHADER_REGISTRY_HPP
 
 #include <string_view>
 #include <unordered_map>
@@ -13,23 +13,26 @@
 namespace vkdemo {
     class DeviceContext;
 
-    class ShaderLibrary {
-    public:
-        ShaderLibrary(const DeviceContext &device_context);
-        virtual ~ShaderLibrary();
+    struct ShaderModule {
+        Slang::ComPtr<slang::IModule>        SlangModule{};
+        Slang::ComPtr<ISlangBlob>            SPIRV{};
+        Slang::ComPtr<slang::IComponentType> LinkedComponent{};
+        vk::ShaderModule                     Module{};
+    };
 
-        void Initialize();
-        void LoadShaders();
+    class ShaderRegistry {
+    public:
+        ShaderRegistry(const DeviceContext &device_context);
+        virtual ~ShaderRegistry();
+
+        void                        Initialize();
+        [[nodiscard]] ShaderModule *GetModule(const std::string &name);
+        void                        LoadShaders();
 
     private:
         static constexpr std::string_view kShaderFolder{"shaders"};
         const std::vector<std::string>    kShaderFilenames{"fullscreen.slang", "test-shader.comp.slang"};
 
-        struct ShaderModule {
-            Slang::ComPtr<slang::IModule> SlangModule{};
-            Slang::ComPtr<ISlangBlob>     SPIRV{};
-            vk::ShaderModule              Module{};
-        };
 
         static void print_diagnostics(const Slang::ComPtr<slang::IBlob> &blob, const std::string_view shader_name);
 
@@ -42,4 +45,4 @@ namespace vkdemo {
     };
 } // namespace vkdemo
 
-#endif // SHADER_LIBRARY_HPP
+#endif // SHADER_REGISTRY_HPP
