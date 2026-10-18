@@ -8,6 +8,8 @@
 
 #include "vma-usage.hpp"
 
+#include <optional>
+
 namespace vkdemo {
     class DeviceContext {
     public:
@@ -15,6 +17,8 @@ namespace vkdemo {
         virtual ~DeviceContext();
 
         void Initialize();
+
+        [[nodiscard]] std::optional<uint32_t> GetMemoryType(uint32_t memory_type_bits, vk::MemoryPropertyFlags memory_property_flags) const;
 
         vk::Instance       Instance;
         vk::PhysicalDevice PhysicalDevice;

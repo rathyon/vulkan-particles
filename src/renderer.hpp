@@ -4,6 +4,7 @@
 #include "device-context.hpp"
 #include "renderer-context.hpp"
 #include "shader-registry.hpp"
+#include "texture.hpp"
 
 namespace vkdemo {
     class Window;
@@ -26,6 +27,8 @@ namespace vkdemo {
         void create_fullscreen_pipeline();
         void create_compute_pipeline();
 
+        void prepare_resources();
+
         void fullscreen_render_pass();
         void simple_compute_pass();
 
@@ -37,6 +40,8 @@ namespace vkdemo {
 
         Pipeline m_fullscreen_pipeline{};
         Pipeline m_simple_compute_pipeline{};
+
+        std::unique_ptr<Texture> m_compute_storage_image{};
     };
 } // namespace vkdemo
 

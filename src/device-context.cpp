@@ -48,6 +48,21 @@ namespace vkdemo {
         initialize_vma();
     }
 
+    std::optional<uint32_t> DeviceContext::GetMemoryType(const uint32_t memory_type_bits, const vk::MemoryPropertyFlags memory_property_flags) const {
+        const uint32_t &memory_type_count = m_physical_device_memory_properties.memoryProperties.memoryTypeCount;
+        const auto     &memory_types      = m_physical_device_memory_properties.memoryProperties.memoryTypes;
+
+        for (uint32_t cur_memory_type_idx = 0; cur_memory_type_idx < memory_type_count; ++cur_memory_type_idx) {
+            const bool found_memory_type       = memory_type_bits & (1 << cur_memory_type_idx);
+            const bool found_memory_properties = (memory_types[cur_memory_type_idx].propertyFlags & memory_property_flags) == memory_property_flags;
+            if (found_memory_type && found_memory_properties) {
+                return cur_memory_type_idx;
+            }
+        }
+
+        return {};
+    }
+
     void DeviceContext::create_instance() {
         // Initialize the dynamic dispatcher first before any vulkan call
         VULKAN_HPP_DEFAULT_DISPATCHER.init();
@@ -199,8 +214,7 @@ namespace vkdemo {
         check(PresentQueueFamily != kFamilyNone, "Failed to find Present queue family.");
 
         std::cout << "Selected queue families:\n"
-                  << "Graphics: " << GraphicsQueueFamily << "\nCompute: " << ComputeQueueFamily << "\nPresent: " << PresentQueueFamily
-                  << "\nTransfer: " << TransferQueueFamily << std::endl;
+                  << "Graphics: " << GraphicsQueueFamily << "\nCompute: " << ComputeQueueFamily << "\nPresent: " << PresentQueueFamily << "\nTransfer: " << TransferQueueFamily << std::endl;
     }
 
     void DeviceContext::create_logical_device() {
@@ -208,10 +222,10 @@ namespace vkdemo {
 
         // Create a set of unique family indices (duplicates are discarded)
         const std::unordered_set unique_queue_families{GraphicsQueueFamily, PresentQueueFamily, ComputeQueueFamily, TransferQueueFamily};
-        const std::vector         all_queue_priority{1.0f};
+        const std::vector        all_queue_priority{1.0f};
 
         std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
-        for (const auto& cur_family : unique_queue_families) {
+        for (const auto &cur_family: unique_queue_families) {
             // Create with no flags, with 1 queue and priority = 1.0f
             vk::DeviceQueueCreateInfo create_info{{}, cur_family, all_queue_priority};
             queue_create_infos.emplace_back(create_info);
@@ -244,10 +258,10 @@ namespace vkdemo {
         device_create_info.setPEnabledExtensionNames(kRequiredDeviceExtensions);
         device_create_info.pNext = enabled_features;
 
-        Device         = PhysicalDevice.createDevice(device_create_info);
+        Device        = PhysicalDevice.createDevice(device_create_info);
         GraphicsQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, GraphicsQueueFamily});
-        PresentQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, PresentQueueFamily});
-        ComputeQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, ComputeQueueFamily});
+        PresentQueue  = Device.getQueue2(vk::DeviceQueueInfo2{{}, PresentQueueFamily});
+        ComputeQueue  = Device.getQueue2(vk::DeviceQueueInfo2{{}, ComputeQueueFamily});
         TransferQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, TransferQueueFamily});
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(Device);

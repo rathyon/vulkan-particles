@@ -18,6 +18,8 @@ namespace vkdemo {
         m_shader_registry->LoadShaders();
 
         create_pipelines();
+
+        prepare_resources();
     }
 
     void Renderer::RenderLoop() {
@@ -27,7 +29,7 @@ namespace vkdemo {
             m_frame_context = m_context->BeginFrame();
 
             m_context->BeginComputeCommands();
-            // simple_compute_pass();
+            simple_compute_pass();
             m_context->EndComputeCommands();
 
             m_context->BeginGraphicsCommands();
@@ -144,16 +146,57 @@ namespace vkdemo {
         m_simple_compute_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_simple_compute_pipeline.Layout != nullptr);
 
-        ShaderModule *simple_compute_module = m_shader_registry->GetModule("simple-compute.slang");
+        ShaderModule                     *simple_compute_module = m_shader_registry->GetModule("simple-compute.slang");
         vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, simple_compute_module->Module, globals::kComputeEntryFunctionName.data()};
 
         vk::ComputePipelineCreateInfo pipeline_ci{};
         pipeline_ci.layout = m_simple_compute_pipeline.Layout;
-        pipeline_ci.stage = shader_stage_ci;
+        pipeline_ci.stage  = shader_stage_ci;
 
         const auto result = m_device_context.Device.createComputePipeline(nullptr, pipeline_ci);
         check(result.result == vk::Result::eSuccess, "Failed to create compute pipeline!");
         m_simple_compute_pipeline.Handle = result.value;
+    }
+
+    void Renderer::prepare_resources() {
+        static constexpr vk::Format kFormat = globals::kColorImageFormat;
+
+        // This compute storage image will be drawn unto by a compute shader. Afterwards it will be read from in a fragment shader.
+        m_compute_storage_image = std::make_unique<Texture>(m_device_context);
+        vk::FormatProperties format_properties{};
+        m_device_context.PhysicalDevice.getFormatProperties(kFormat, &format_properties);
+        check(static_cast<bool>(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eStorageImage), "Device does not contain format capable of storage image");
+
+        vk::ImageCreateInfo create_info{};
+        create_info.imageType   = vk::ImageType::e2D;
+        create_info.format      = kFormat;
+        create_info.extent      = globals::kRenderExtent3D;
+        create_info.mipLevels   = 1;
+        create_info.arrayLayers = 1;
+        create_info.samples     = vk::SampleCountFlagBits::e1;
+        create_info.tiling      = vk::ImageTiling::eOptimal;
+        create_info.usage       = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage;
+
+        // Optimization point: it would be more efficient to use exclusive and perform queue ownership transfers, but I don't have the time to do that right now
+        const bool graphics_and_compute_same_family = m_device_context.GraphicsQueueFamily == m_device_context.ComputeQueueFamily;
+        create_info.sharingMode                     = graphics_and_compute_same_family ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent;
+        create_info.queueFamilyIndexCount           = graphics_and_compute_same_family ? 1 : 2;
+        std::vector<uint32_t> queue_family_indices{m_device_context.GraphicsQueueFamily, m_device_context.ComputeQueueFamily};
+        create_info.pQueueFamilyIndices = queue_family_indices.data();
+
+        m_compute_storage_image->Handle = m_device_context.Device.createImage(create_info);
+
+        VmaAllocationCreateInfo allocation_create_info{};
+        allocation_create_info.usage    = VMA_MEMORY_USAGE_AUTO;
+        allocation_create_info.flags    = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        allocation_create_info.priority = 1.0f;
+
+        vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&m_compute_storage_image->Handle),
+                       &m_compute_storage_image->Allocation, nullptr);
+
+        // todo create image view
+        // todo descriptor
+        // todo create sampler
     }
 
     void Renderer::fullscreen_render_pass() {
@@ -187,7 +230,7 @@ namespace vkdemo {
     }
 
     void Renderer::simple_compute_pass() {
-        const auto& cb = m_frame_context->ComputeCB;
+        const auto &cb = m_frame_context->ComputeCB;
 
         cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_simple_compute_pipeline.Handle);
 
