@@ -59,10 +59,10 @@ namespace vkdemo {
     void Renderer::create_graphics_pass() {
         m_graphics_pass = std::make_unique<RenderPass>(m_device_context.Device);
 
-        std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: input image
-                                                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eFragment},
-                                                                        // Binding 1: sampler
-                                                                        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}};
+        std::vector set_layout_bindings{// Binding 0: input image
+                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eFragment},
+                                        // Binding 1: sampler
+                                        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
         m_graphics_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
@@ -207,7 +207,8 @@ namespace vkdemo {
         static constexpr vk::Format kFormat = globals::kColorImageFormat;
 
         // This compute storage image will be drawn unto by a compute shader. Afterwards it will be read from in a fragment shader.
-        m_storage_image = std::make_unique<Texture>(m_device_context);
+        m_storage_image = std::make_unique<SampledImage>(m_device_context);
+        m_storage_image->Aspect = vk::ImageAspectFlagBits::eColor;
         vk::FormatProperties format_properties{};
         m_device_context.PhysicalDevice.getFormatProperties(kFormat, &format_properties);
         check(static_cast<bool>(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eStorageImage), "Device does not contain format capable of storage image");
@@ -230,8 +231,6 @@ namespace vkdemo {
         std::vector<uint32_t> queue_family_indices{m_device_context.GraphicsQueueFamily, m_device_context.ComputeQueueFamily};
         create_info.pQueueFamilyIndices = queue_family_indices.data();
 
-        m_storage_image->Aspect = vk::ImageAspectFlagBits::eColor;
-
         VmaAllocationCreateInfo allocation_create_info{};
         allocation_create_info.usage    = VMA_MEMORY_USAGE_AUTO;
         allocation_create_info.flags    = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
@@ -247,22 +246,6 @@ namespace vkdemo {
         view_ci.format           = kFormat;
         view_ci.subresourceRange = vk::ImageSubresourceRange{m_storage_image->Aspect, 0, 1, 0, 1};
         m_storage_image->View    = m_device_context.Device.createImageView(view_ci);
-
-        // create sampler
-        vk::SamplerCreateInfo sampler_ci{};
-        sampler_ci.magFilter     = vk::Filter::eLinear;
-        sampler_ci.minFilter     = vk::Filter::eLinear;
-        sampler_ci.mipmapMode    = vk::SamplerMipmapMode::eLinear;
-        sampler_ci.addressModeU  = vk::SamplerAddressMode::eClampToBorder;
-        sampler_ci.addressModeV  = sampler_ci.addressModeU;
-        sampler_ci.addressModeW  = sampler_ci.addressModeU;
-        sampler_ci.mipLodBias    = 0.0f;
-        sampler_ci.maxAnisotropy = 1.0f;
-        sampler_ci.compareOp     = vk::CompareOp::eNever;
-        sampler_ci.minLod        = 0.0f;
-        sampler_ci.maxLod        = 1.0f;
-        sampler_ci.borderColor   = vk::BorderColor::eFloatOpaqueBlack;
-        m_storage_image->Sampler = m_device_context.Device.createSampler(sampler_ci);
 
         // fill descriptor
         m_storage_image->Descriptor.imageView = m_storage_image->View;

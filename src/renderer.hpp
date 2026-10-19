@@ -3,11 +3,29 @@
 
 #include "device-context.hpp"
 #include "renderer-context.hpp"
+#include "resource/sampled-image.hpp"
 #include "shader-registry.hpp"
-#include "texture.hpp"
 
 namespace vkdemo {
     class Window;
+
+    class RenderPass {
+    public:
+        RenderPass(vk::Device device) : m_device(device) {}
+        ~RenderPass() {
+            m_device.destroyDescriptorSetLayout(DescriptorSetLayout);
+            m_device.destroyPipelineLayout(PipelineLayout);
+            m_device.destroyPipeline(Pipeline);
+        }
+
+        vk::Pipeline                             Pipeline{};
+        vk::PipelineLayout                       PipelineLayout{};
+        vk::DescriptorSetLayout                  DescriptorSetLayout{};
+        std::vector<Buffered<vk::DescriptorSet>> DescriptorSets{};
+
+    private:
+        vk::Device m_device;
+    };
 
     class Renderer {
     public:
@@ -18,23 +36,7 @@ namespace vkdemo {
         void RenderLoop();
 
     private:
-        class RenderPass {
-        public:
-            RenderPass(vk::Device device) : m_device(device) {}
-            ~RenderPass() {
-                m_device.destroyDescriptorSetLayout(DescriptorSetLayout);
-                m_device.destroyPipelineLayout(PipelineLayout);
-                m_device.destroyPipeline(Pipeline);
-            }
 
-            vk::Pipeline                             Pipeline{};
-            vk::PipelineLayout                       PipelineLayout{};
-            vk::DescriptorSetLayout                  DescriptorSetLayout{};
-            std::vector<Buffered<vk::DescriptorSet>> DescriptorSets{};
-
-        private:
-            vk::Device m_device;
-        };
 
         void create_render_passes();
         void create_graphics_pass();
@@ -59,7 +61,7 @@ namespace vkdemo {
         std::unique_ptr<RenderPass> m_graphics_pass{};
         std::unique_ptr<RenderPass> m_compute_pass{};
 
-        std::unique_ptr<Texture> m_storage_image{};
+        std::unique_ptr<SampledImage> m_storage_image{};
     };
 } // namespace vkdemo
 

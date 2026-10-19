@@ -19,7 +19,7 @@ namespace vkdemo {
     void ShaderRegistry::Initialize() {
         slang::createGlobalSession(m_slang_global_session.writeRef());
 
-        // Create the slang session to compile shaders
+        // Create the slang session to compile shader
         slang::TargetDesc target_desc;
         target_desc.format  = SLANG_SPIRV;
         target_desc.profile = m_slang_global_session->findProfile("spirv_1_6"); // guaranteed supported version by Vulkan 1.4

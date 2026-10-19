@@ -30,7 +30,7 @@ namespace vkdemo {
         void                        LoadShaders();
 
     private:
-        static constexpr std::string_view kShaderFolder{"shaders"};
+        static constexpr std::string_view kShaderFolder{"shader"};
         const std::vector<std::string>    kShaderFilenames{"fullscreen.slang", "simple-compute.slang"};
 
 

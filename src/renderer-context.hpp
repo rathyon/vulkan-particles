@@ -1,12 +1,13 @@
 #ifndef RENDERER_CONTEXT_HPP
 #define RENDERER_CONTEXT_HPP
 
-#include "image.hpp"
+#include "resource/render-attachment.hpp"
 #include "util.hpp"
 
 namespace vkdemo {
     class Window;
     class DeviceContext;
+    class Swapchain;
 
     struct FrameContext {
         uint32_t          Index = 0;
@@ -27,13 +28,10 @@ namespace vkdemo {
         void                        EndGraphicsCommands();
         void                        EndComputeCommands();
 
-        Buffered<std::unique_ptr<Image>> MainColorAttachments{};
-        std::unique_ptr<Image>           DepthStencilAttachment{};
+        Buffered<std::unique_ptr<RenderAttachment>> MainColorAttachments{};
+        std::unique_ptr<RenderAttachment>           DepthStencilAttachment{};
 
     private:
-        static constexpr vk::Format        kSwapchainFormat     = vk::Format::eB8G8R8A8Srgb;
-        static constexpr vk::ColorSpaceKHR kSwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
-
         void create_sync_objects();
         void create_command_buffers();
         void create_attachments();
@@ -43,14 +41,12 @@ namespace vkdemo {
         const DeviceContext &m_device_context;
         const vk::Device    &m_device;
 
-        vk::SurfaceKHR                      m_surface;
-        vk::SwapchainKHR                    m_swapchain;
-        std::vector<std::unique_ptr<Image>> m_swapchain_images{};
-        uint32_t                            m_swapchain_image_index{};
+        vk::SurfaceKHR             m_surface;
+        std::unique_ptr<Swapchain> m_swapchain{};
+        uint32_t                   m_swapchain_image_index{};
 
-        Buffered<vk::Fence>        m_graphics_fences{};
-        Buffered<vk::Semaphore>    m_image_acquired_semaphores{};
-        std::vector<vk::Semaphore> m_render_complete_semaphores{};
+        Buffered<vk::Fence>     m_graphics_fences{};
+        Buffered<vk::Semaphore> m_image_acquired_semaphores{};
 
         Buffered<vk::Fence>     m_compute_fences{};
         Buffered<vk::Semaphore> m_compute_ready_semaphores{};
@@ -69,4 +65,4 @@ namespace vkdemo {
 } // namespace vkdemo
 
 
-#endif // RENDERER_CONTEXT_HPP
+#endif //

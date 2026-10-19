@@ -4,6 +4,8 @@ project(vulkan_particles)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_COMPILE_WARNING_AS_ERROR 1)
 
+include_directories(src)
+
 find_package(Vulkan REQUIRED)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
@@ -28,14 +30,18 @@ add_executable(vulkan_particles
         src/renderer.cpp
         src/Renderer.hpp
         src/vk-util.hpp
-        src/image.cpp
-        src/image.hpp
-        src/buffer.cpp
-        src/buffer.hpp
-        src/texture.cpp
-        src/texture.hpp
-        src/shaders/fullscreen.slang
-        src/shaders/simple-compute.slang
+        src/resource/image.cpp
+        src/resource/image.hpp
+        src/resource/buffer.cpp
+        src/resource/buffer.hpp
+        src/resource/sampled-image.cpp
+        src/resource/sampled-image.hpp
+        src/shader/fullscreen.slang
+        src/shader/simple-compute.slang
+        src/resource/render-attachment.cpp
+        src/resource/render-attachment.hpp
+        src/resource/swapchain.cpp
+        src/resource/swapchain.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})
@@ -45,9 +51,9 @@ target_link_libraries(vulkan_particles PRIVATE ${Slang_LIBRARY})
 # In case I want to use PCH
 #target_precompile_headers(vulkan_particles PRIVATE src/pch.hpp)
 
-# Copy shaders into directory of executable
+# Copy shader into directory of executable
 add_custom_command(
         TARGET vulkan_particles
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E
-        copy_directory ${CMAKE_SOURCE_DIR}/src/shaders/ $<TARGET_FILE_DIR:vulkan_particles>/shaders/)
+        copy_directory ${CMAKE_SOURCE_DIR}/src/shader/ $<TARGET_FILE_DIR:vulkan_particles>/shader/)

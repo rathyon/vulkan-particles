@@ -7,11 +7,15 @@
 namespace vkdemo {
     class DeviceContext;
 
-    // Class that encapsulates most Image logic. Swapchain images and images used exclusively as attachments are of this type.
     class Image {
     public:
         explicit Image(const DeviceContext &device_context) : m_device_context(device_context) {};
         virtual ~Image();
+
+        Image(const Image &)             = delete;
+        Image(const Image &&)            = delete;
+        Image &operator=(const Image &)  = delete;
+        Image &operator=(const Image &&) = delete;
 
         vk::Image            Handle{};
         vk::ImageView        View{};
