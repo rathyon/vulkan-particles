@@ -204,57 +204,9 @@ namespace vkdemo {
     }
 
     void Renderer::create_images() {
-        static constexpr vk::Format kFormat = globals::kColorImageFormat;
-
         // This compute storage image will be drawn unto by a compute shader. Afterwards it will be read from in a fragment shader.
-        m_storage_image = std::make_unique<SampledImage>(m_device_context);
-        m_storage_image->Aspect = vk::ImageAspectFlagBits::eColor;
-        vk::FormatProperties format_properties{};
-        m_device_context.PhysicalDevice.getFormatProperties(kFormat, &format_properties);
-        check(static_cast<bool>(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eStorageImage), "Device does not contain format capable of storage image");
-
-        vk::ImageCreateInfo create_info{};
-        create_info.imageType   = vk::ImageType::e2D;
-        create_info.format      = kFormat;
-        create_info.extent      = globals::kRenderExtent3D;
-        create_info.mipLevels   = 1;
-        create_info.arrayLayers = 1;
-        create_info.samples     = vk::SampleCountFlagBits::e1;
-        create_info.tiling      = vk::ImageTiling::eOptimal;
-        // Host transfer usage to allow host layout transitions
-        create_info.usage       = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eHostTransfer;
-
-        // Optimization point: it would be more efficient to use exclusive and perform queue ownership transfers, but I don't have the time to do that right now
-        const bool graphics_and_compute_same_family = m_device_context.GraphicsQueueFamily == m_device_context.ComputeQueueFamily;
-        create_info.sharingMode                     = graphics_and_compute_same_family ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent;
-        create_info.queueFamilyIndexCount           = graphics_and_compute_same_family ? 1 : 2;
-        std::vector<uint32_t> queue_family_indices{m_device_context.GraphicsQueueFamily, m_device_context.ComputeQueueFamily};
-        create_info.pQueueFamilyIndices = queue_family_indices.data();
-
-        VmaAllocationCreateInfo allocation_create_info{};
-        allocation_create_info.usage    = VMA_MEMORY_USAGE_AUTO;
-        allocation_create_info.flags    = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-        allocation_create_info.priority = 1.0f;
-
-        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&m_storage_image->Handle),
-                             &m_storage_image->Allocation, nullptr));
-
-        // create image view
-        vk::ImageViewCreateInfo view_ci{};
-        view_ci.image            = m_storage_image->Handle;
-        view_ci.viewType         = vk::ImageViewType::e2D;
-        view_ci.format           = kFormat;
-        view_ci.subresourceRange = vk::ImageSubresourceRange{m_storage_image->Aspect, 0, 1, 0, 1};
-        m_storage_image->View    = m_device_context.Device.createImageView(view_ci);
-
-        // fill descriptor
-        m_storage_image->Descriptor.imageView = m_storage_image->View;
-        m_storage_image->Descriptor.sampler   = m_storage_image->Sampler;
-
-        // transition image to general layout on the host
-        m_device_context.Device.transitionImageLayout(
-                vk::HostImageLayoutTransitionInfo{m_storage_image->Handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, vk::ImageSubresourceRange{m_storage_image->Aspect, 0, 1, 0, 1}});
-        m_storage_image->Descriptor.imageLayout = m_storage_image->Layout = vk::ImageLayout::eGeneral;
+        m_post_process_effect_texture = std::make_unique<Texture>(m_device_context, TextureType::RGBA8_2D);
+        m_post_process_effect_texture->HostLayoutTransition(vk::ImageLayout::eGeneral);
     }
 
     void Renderer::update_descriptor_sets() {
@@ -265,8 +217,8 @@ namespace vkdemo {
             vk::DescriptorSetAllocateInfo gfx_alloc_info{m_descriptor_pool, {m_graphics_pass->DescriptorSetLayout}};
             check(m_device_context.Device.allocateDescriptorSets(&gfx_alloc_info, &descriptor_set));
 
-            std::vector gfx_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, m_storage_image->Descriptor},
-                                                     vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, m_storage_image->Descriptor}};
+            std::vector gfx_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, m_post_process_effect_texture->Descriptor},
+                                                     vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, m_post_process_effect_texture->Descriptor}};
 
             m_device_context.Device.updateDescriptorSets(gfx_write_descriptor_sets, {});
         }
@@ -278,7 +230,7 @@ namespace vkdemo {
             vk::DescriptorSetAllocateInfo comp_alloc_info{m_descriptor_pool, {m_compute_pass->DescriptorSetLayout}};
             check(m_device_context.Device.allocateDescriptorSets(&comp_alloc_info, &descriptor_set));
 
-            std::vector comp_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eStorageImage, m_storage_image->Descriptor}};
+            std::vector comp_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eStorageImage, m_post_process_effect_texture->Descriptor}};
 
             m_device_context.Device.updateDescriptorSets(comp_write_descriptor_sets, {});
         }
@@ -317,7 +269,7 @@ namespace vkdemo {
     void Renderer::simple_compute_pass() {
         const auto &cb = m_frame_context->ComputeCB;
 
-        m_storage_image->LayoutTransition(cb, vk::ImageLayout::eGeneral);
+        m_post_process_effect_texture->LayoutTransition(cb, vk::ImageLayout::eGeneral);
         cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_compute_pass->Pipeline);
         cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_compute_pass->PipelineLayout, 0, {m_compute_pass->DescriptorSets[0][m_frame_context->Index]}, {});
         cb.dispatch(globals::kRenderExtent2D.width / 16, globals::kRenderExtent2D.height / 16, 1);

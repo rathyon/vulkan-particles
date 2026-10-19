@@ -44,7 +44,6 @@ namespace vkdemo {
             Images[i]->Handle = swapchain_images[i];
 
             image_view_create_info.image = Images[i]->Handle;
-            Images[i]->View              = m_device_context.Device.createImageView(image_view_create_info);
             Images[i]->Aspect            = image_view_create_info.subresourceRange.aspectMask;
         }
 

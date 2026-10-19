@@ -7,12 +7,12 @@
 namespace vkdemo {
 
     RenderAttachment::RenderAttachment(const DeviceContext &context, const RenderAttachmentType type) : SampledImage(context) {
+        Format = type == RenderAttachmentType::Color ? globals::kColorAttachmentFormat : globals::kDepthStencilAttachmentFormat;
         Aspect = type == RenderAttachmentType::Color ? vk::ImageAspectFlagBits::eColor : vk::ImageAspectFlagBits::eDepth;
 
-        // Create color attachments
         vk::ImageCreateInfo color_create_info{};
         color_create_info.imageType   = vk::ImageType::e2D;
-        color_create_info.format      = type == RenderAttachmentType::Color ? globals::kColorAttachmentFormat : globals::kDepthStencilAttachmentFormat;
+        color_create_info.format      = Format;
         color_create_info.extent      = globals::kRenderExtent3D;
         color_create_info.mipLevels   = 1;
         color_create_info.arrayLayers = 1;
@@ -36,16 +36,7 @@ namespace vkdemo {
         check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&color_create_info), &alloc_info, reinterpret_cast<VkImage *>(&Handle), &Allocation, nullptr),
               "Failed to create attachment");
 
-        // Create view
-        vk::ImageViewCreateInfo color_view_create_info{};
-        color_view_create_info.viewType                    = vk::ImageViewType::e2D;
-        color_view_create_info.format                      = color_create_info.format;
-        color_view_create_info.subresourceRange.aspectMask = Aspect;
-        color_view_create_info.subresourceRange.levelCount = 1;
-        color_view_create_info.subresourceRange.layerCount = 1;
-
-        color_view_create_info.image = Handle;
-        View                         = m_device_context.Device.createImageView(color_view_create_info);
+        create_image_view();
     }
 
 } // namespace vkdemo

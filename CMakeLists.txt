@@ -34,14 +34,16 @@ add_executable(vulkan_particles
         src/resource/image.hpp
         src/resource/buffer.cpp
         src/resource/buffer.hpp
-        src/resource/sampled-image.cpp
-        src/resource/sampled-image.hpp
+        src/resource/texture.cpp
+        src/resource/texture.hpp
         src/shader/fullscreen.slang
         src/shader/simple-compute.slang
         src/resource/render-attachment.cpp
         src/resource/render-attachment.hpp
         src/resource/swapchain.cpp
         src/resource/swapchain.hpp
+        src/resource/sampled-image.cpp
+        src/resource/sampled-image.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

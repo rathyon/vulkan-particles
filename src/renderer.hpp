@@ -3,7 +3,7 @@
 
 #include "device-context.hpp"
 #include "renderer-context.hpp"
-#include "resource/sampled-image.hpp"
+#include "resource/texture.hpp"
 #include "shader-registry.hpp"
 
 namespace vkdemo {
@@ -61,7 +61,7 @@ namespace vkdemo {
         std::unique_ptr<RenderPass> m_graphics_pass{};
         std::unique_ptr<RenderPass> m_compute_pass{};
 
-        std::unique_ptr<SampledImage> m_storage_image{};
+        std::unique_ptr<Texture> m_post_process_effect_texture{};
     };
 } // namespace vkdemo
 

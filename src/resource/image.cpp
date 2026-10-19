@@ -4,11 +4,11 @@
 
 namespace vkdemo {
     Image::~Image() {
-        m_device_context.Device.destroyImageView(View);
-
         if (Allocation != nullptr) {
             vmaDestroyImage(m_device_context.VmaAllocator, Handle, Allocation);
         }
+
+        // if image was not allocated through VMA, then it is a swapchain image. That one is destroyed when the surface is destroyed and thus not done here.
     }
 
     void Image::LayoutTransition(const vk::CommandBuffer &cb, const vk::ImageLayout new_layout) {

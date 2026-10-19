@@ -7,18 +7,19 @@ namespace vkdemo {
 
     class SampledImage : public Image {
     public:
-        explicit SampledImage(const DeviceContext &device_context);
-        ~SampledImage() override;
-
         SampledImage(const SampledImage &)             = delete;
         SampledImage(const SampledImage &&)            = delete;
         SampledImage &operator=(const SampledImage &)  = delete;
         SampledImage &operator=(const SampledImage &&) = delete;
 
-        void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout) override;
-
+        vk::ImageView           View{};
         vk::DescriptorImageInfo Descriptor{};
-        vk::Sampler             Sampler{};
+
+    protected:
+        explicit SampledImage(const DeviceContext &context);
+        ~SampledImage() override;
+
+        void create_image_view();
     };
 
 } // namespace vkdemo

@@ -18,7 +18,6 @@ namespace vkdemo {
         Image &operator=(const Image &&) = delete;
 
         vk::Image            Handle{};
-        vk::ImageView        View{};
         vk::ImageLayout      Layout{vk::ImageLayout::eUndefined};
         vk::ImageAspectFlags Aspect{};
         vk::Format           Format{};

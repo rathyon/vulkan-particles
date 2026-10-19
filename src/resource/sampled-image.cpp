@@ -4,7 +4,7 @@
 #include "util.hpp"
 
 namespace vkdemo {
-    SampledImage::SampledImage(const DeviceContext &device_context) : Image(device_context) {
+    SampledImage::SampledImage(const DeviceContext &context) : Image(context) {
         // Standard type of sampler, does linear filtering, border clamp, black border
         vk::SamplerCreateInfo sampler_ci{};
         sampler_ci.magFilter     = vk::Filter::eLinear;
@@ -19,16 +19,25 @@ namespace vkdemo {
         sampler_ci.minLod        = 0.0f;
         sampler_ci.maxLod        = 1.0f;
         sampler_ci.borderColor   = vk::BorderColor::eFloatOpaqueBlack;
-        Sampler                  = m_device_context.Device.createSampler(sampler_ci);
-        check(Sampler != nullptr);
-    }
 
+        Descriptor.sampler = m_device_context.Device.createSampler(sampler_ci);
+        check(Descriptor.sampler != nullptr);
+    }
     SampledImage::~SampledImage() {
-        m_device_context.Device.destroySampler(Sampler);
+        if (View != nullptr)
+            m_device_context.Device.destroyImageView(View);
+
+        m_device_context.Device.destroySampler(Descriptor.sampler);
     }
 
-    void SampledImage::LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout) {
-        Descriptor.imageLayout = new_layout;
-        Image::LayoutTransition(cb, new_layout);
+    void SampledImage::create_image_view() {
+        vk::ImageViewCreateInfo view_ci{};
+        view_ci.image            = Handle;
+        view_ci.viewType         = vk::ImageViewType::e2D;
+        view_ci.format           = Format;
+        view_ci.subresourceRange = vk::ImageSubresourceRange{Aspect, 0, 1, 0, 1};
+
+        View                 = m_device_context.Device.createImageView(view_ci);
+        Descriptor.imageView = View;
     }
 } // namespace vkdemo

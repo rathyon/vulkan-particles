@@ -1,6 +1,6 @@
 #ifndef RENDER_ATTACHMENT_HPP
 #define RENDER_ATTACHMENT_HPP
-#include "sampled-image.hpp"
+#include "texture.hpp"
 
 namespace vkdemo {
 
