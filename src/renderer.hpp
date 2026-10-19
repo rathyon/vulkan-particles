@@ -18,15 +18,27 @@ namespace vkdemo {
         void RenderLoop();
 
     private:
-        struct Pipeline {
-            vk::Pipeline            Handle{};
-            vk::PipelineLayout      Layout{};
-            vk::DescriptorSetLayout DescriptorSetLayout{};
+        class RenderPass {
+        public:
+            RenderPass(vk::Device device) : m_device(device) {}
+            ~RenderPass() {
+                m_device.destroyDescriptorSetLayout(DescriptorSetLayout);
+                m_device.destroyPipelineLayout(PipelineLayout);
+                m_device.destroyPipeline(Pipeline);
+            }
+
+            vk::Pipeline                             Pipeline{};
+            vk::PipelineLayout                       PipelineLayout{};
+            vk::DescriptorSetLayout                  DescriptorSetLayout{};
+            std::vector<Buffered<vk::DescriptorSet>> DescriptorSets{};
+
+        private:
+            vk::Device m_device;
         };
 
-        void create_pipelines();
-        void create_fullscreen_pipeline();
-        void create_compute_pipeline();
+        void create_render_passes();
+        void create_graphics_pass();
+        void create_compute_pass();
 
         void prepare_resources();
         void create_descriptor_pool();
@@ -42,14 +54,12 @@ namespace vkdemo {
 
         FrameContext *m_frame_context = nullptr;
 
-        vk::DescriptorPool          m_descriptor_pool{};
-        Pipeline                    m_fullscreen_pipeline{};
-        Buffered<vk::DescriptorSet> m_fullscreen_descriptor_sets{};
+        vk::DescriptorPool        m_descriptor_pool{};
 
-        Pipeline          m_simple_compute_pipeline{};
-        vk::DescriptorSet m_simple_compute_descriptor_set{};
+        std::unique_ptr<RenderPass> m_graphics_pass{};
+        std::unique_ptr<RenderPass> m_compute_pass{};
 
-        std::unique_ptr<Texture> m_compute_storage_image{};
+        std::unique_ptr<Texture> m_storage_image{};
     };
 } // namespace vkdemo
 

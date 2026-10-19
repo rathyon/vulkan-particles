@@ -1,5 +1,4 @@
-public RWTexture2D<float4> ResultImage;
-// public RWTexture2D<uint8_t4> resultImage; //todo Which one is correct?
+RWTexture2D<float4> ResultImage;
 
 [shader("compute")]
 [numthreads(16, 16, 1)]

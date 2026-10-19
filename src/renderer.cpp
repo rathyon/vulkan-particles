@@ -4,17 +4,7 @@
 
 namespace vkdemo {
 
-    Renderer::~Renderer() {
-        m_device_context.Device.destroyPipelineLayout(m_fullscreen_pipeline.Layout);
-        m_device_context.Device.destroyPipeline(m_fullscreen_pipeline.Handle);
-        m_device_context.Device.destroyDescriptorSetLayout(m_fullscreen_pipeline.DescriptorSetLayout);
-
-        m_device_context.Device.destroyPipelineLayout(m_simple_compute_pipeline.Layout);
-        m_device_context.Device.destroyPipeline(m_simple_compute_pipeline.Handle);
-        m_device_context.Device.destroyDescriptorSetLayout(m_simple_compute_pipeline.DescriptorSetLayout);
-
-        m_device_context.Device.destroyDescriptorPool(m_descriptor_pool);
-    }
+    Renderer::~Renderer() { m_device_context.Device.destroyDescriptorPool(m_descriptor_pool); }
 
     void Renderer::Initialize(const Window &window) {
         m_device_context.Initialize();
@@ -27,12 +17,12 @@ namespace vkdemo {
         m_shader_registry->LoadShaders();
 
         prepare_resources();
-        create_pipelines();
+        create_render_passes();
     }
 
     void Renderer::RenderLoop() {
-        uint64_t last_time{ SDL_GetTicks() };
-        bool stop = false;
+        uint64_t last_time{SDL_GetTicks()};
+        bool     stop = false;
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
 
@@ -46,7 +36,7 @@ namespace vkdemo {
 
             m_context->EndFrame();
 
-            float elapsed_time{ static_cast<float>(SDL_GetTicks() - last_time) / 1000.0f };
+            float elapsed_time{static_cast<float>(SDL_GetTicks() - last_time) / 1000.0f};
             last_time = SDL_GetTicks();
             for (SDL_Event event; SDL_PollEvent(&event);) {
                 if (event.type == SDL_EVENT_QUIT) {
@@ -60,15 +50,14 @@ namespace vkdemo {
         m_device_context.Device.waitIdle();
     }
 
-    void Renderer::create_pipelines() {
-        create_fullscreen_pipeline();
-        create_compute_pipeline();
+    void Renderer::create_render_passes() {
+        create_graphics_pass();
+        create_compute_pass();
         update_descriptor_sets();
     }
 
-    void Renderer::create_fullscreen_pipeline() {
-        // This fullscreen shader uses a technique described by Sascha Willems:
-        // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
+    void Renderer::create_graphics_pass() {
+        m_graphics_pass = std::make_unique<RenderPass>(m_device_context.Device);
 
         std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: input image
                                                                         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eFragment},
@@ -76,12 +65,14 @@ namespace vkdemo {
                                                                         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
-        m_fullscreen_pipeline.DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        m_graphics_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setSetLayouts(m_fullscreen_pipeline.DescriptorSetLayout);
-        m_fullscreen_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
-        check(m_fullscreen_pipeline.Layout != nullptr);
+        pipeline_layout_ci.setSetLayouts(m_graphics_pass->DescriptorSetLayout);
+        m_graphics_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
+        check(m_graphics_pass->PipelineLayout != nullptr);
 
+        // The fullscreen shader uses a technique described by Sascha Willems:
+        // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
         ShaderModule *fullscreen_module = m_shader_registry->GetModule("fullscreen.slang");
 
         std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, fullscreen_module->Module, globals::kVertexEntryFunctionName.data()},
@@ -153,7 +144,7 @@ namespace vkdemo {
         pipeline_ci.pDepthStencilState  = &depth_stencil_state;
         pipeline_ci.pColorBlendState    = &color_blend_state;
         pipeline_ci.pDynamicState       = &dynamic_state;
-        pipeline_ci.layout              = m_fullscreen_pipeline.Layout;
+        pipeline_ci.layout              = m_graphics_pass->PipelineLayout;
 
         vk::PipelineRenderingCreateInfo pipeline_rendering_create_info{{}, globals::kColorAttachmentFormat, globals::kDepthStencilAttachmentFormat};
         pipeline_ci.pNext = &pipeline_rendering_create_info;
@@ -161,32 +152,34 @@ namespace vkdemo {
         const auto result = m_device_context.Device.createGraphicsPipeline(nullptr, pipeline_ci);
         check(result.result == vk::Result::eSuccess, "Failed to create graphics pipeline!");
 
-        m_fullscreen_pipeline.Handle = result.value;
+        m_graphics_pass->Pipeline = result.value;
     }
 
-    void Renderer::create_compute_pipeline() {
+    void Renderer::create_compute_pass() {
+        m_compute_pass = std::make_unique<RenderPass>(m_device_context.Device);
+
         std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: input image
                                                                         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eCompute}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
-        m_simple_compute_pipeline.DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        m_compute_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
 
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setSetLayouts(m_simple_compute_pipeline.DescriptorSetLayout);
+        pipeline_layout_ci.setSetLayouts(m_compute_pass->DescriptorSetLayout);
 
-        m_simple_compute_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
-        check(m_simple_compute_pipeline.Layout != nullptr);
+        m_compute_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
+        check(m_compute_pass->PipelineLayout != nullptr);
 
         ShaderModule                     *simple_compute_module = m_shader_registry->GetModule("simple-compute.slang");
         vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, simple_compute_module->Module, globals::kComputeEntryFunctionName.data()};
 
         vk::ComputePipelineCreateInfo pipeline_ci{};
-        pipeline_ci.layout = m_simple_compute_pipeline.Layout;
+        pipeline_ci.layout = m_compute_pass->PipelineLayout;
         pipeline_ci.stage  = shader_stage_ci;
 
         const auto result = m_device_context.Device.createComputePipeline(nullptr, pipeline_ci);
         check(result.result == vk::Result::eSuccess, "Failed to create compute pipeline!");
-        m_simple_compute_pipeline.Handle = result.value;
+        m_compute_pass->Pipeline = result.value;
     }
 
     void Renderer::prepare_resources() {
@@ -214,7 +207,7 @@ namespace vkdemo {
         static constexpr vk::Format kFormat = globals::kColorImageFormat;
 
         // This compute storage image will be drawn unto by a compute shader. Afterwards it will be read from in a fragment shader.
-        m_compute_storage_image = std::make_unique<Texture>(m_device_context);
+        m_storage_image = std::make_unique<Texture>(m_device_context);
         vk::FormatProperties format_properties{};
         m_device_context.PhysicalDevice.getFormatProperties(kFormat, &format_properties);
         check(static_cast<bool>(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eStorageImage), "Device does not contain format capable of storage image");
@@ -237,70 +230,75 @@ namespace vkdemo {
         std::vector<uint32_t> queue_family_indices{m_device_context.GraphicsQueueFamily, m_device_context.ComputeQueueFamily};
         create_info.pQueueFamilyIndices = queue_family_indices.data();
 
-        m_compute_storage_image->Aspect = vk::ImageAspectFlagBits::eColor;
+        m_storage_image->Aspect = vk::ImageAspectFlagBits::eColor;
 
         VmaAllocationCreateInfo allocation_create_info{};
         allocation_create_info.usage    = VMA_MEMORY_USAGE_AUTO;
         allocation_create_info.flags    = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         allocation_create_info.priority = 1.0f;
 
-        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&m_compute_storage_image->Handle),
-                       &m_compute_storage_image->Allocation, nullptr));
+        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&m_storage_image->Handle),
+                             &m_storage_image->Allocation, nullptr));
 
         // create image view
         vk::ImageViewCreateInfo view_ci{};
-        view_ci.image                 = m_compute_storage_image->Handle;
-        view_ci.viewType              = vk::ImageViewType::e2D;
-        view_ci.format                = kFormat;
-        view_ci.subresourceRange      = vk::ImageSubresourceRange{m_compute_storage_image->Aspect, 0, 1, 0, 1};
-        m_compute_storage_image->View = m_device_context.Device.createImageView(view_ci);
+        view_ci.image            = m_storage_image->Handle;
+        view_ci.viewType         = vk::ImageViewType::e2D;
+        view_ci.format           = kFormat;
+        view_ci.subresourceRange = vk::ImageSubresourceRange{m_storage_image->Aspect, 0, 1, 0, 1};
+        m_storage_image->View    = m_device_context.Device.createImageView(view_ci);
 
         // create sampler
         vk::SamplerCreateInfo sampler_ci{};
-        sampler_ci.magFilter             = vk::Filter::eLinear;
-        sampler_ci.minFilter             = vk::Filter::eLinear;
-        sampler_ci.mipmapMode            = vk::SamplerMipmapMode::eLinear;
-        sampler_ci.addressModeU          = vk::SamplerAddressMode::eClampToBorder;
-        sampler_ci.addressModeV          = sampler_ci.addressModeU;
-        sampler_ci.addressModeW          = sampler_ci.addressModeU;
-        sampler_ci.mipLodBias            = 0.0f;
-        sampler_ci.maxAnisotropy         = 1.0f;
-        sampler_ci.compareOp             = vk::CompareOp::eNever;
-        sampler_ci.minLod                = 0.0f;
-        sampler_ci.maxLod                = 1.0f;
-        sampler_ci.borderColor           = vk::BorderColor::eFloatOpaqueBlack;
-        m_compute_storage_image->Sampler = m_device_context.Device.createSampler(sampler_ci);
+        sampler_ci.magFilter     = vk::Filter::eLinear;
+        sampler_ci.minFilter     = vk::Filter::eLinear;
+        sampler_ci.mipmapMode    = vk::SamplerMipmapMode::eLinear;
+        sampler_ci.addressModeU  = vk::SamplerAddressMode::eClampToBorder;
+        sampler_ci.addressModeV  = sampler_ci.addressModeU;
+        sampler_ci.addressModeW  = sampler_ci.addressModeU;
+        sampler_ci.mipLodBias    = 0.0f;
+        sampler_ci.maxAnisotropy = 1.0f;
+        sampler_ci.compareOp     = vk::CompareOp::eNever;
+        sampler_ci.minLod        = 0.0f;
+        sampler_ci.maxLod        = 1.0f;
+        sampler_ci.borderColor   = vk::BorderColor::eFloatOpaqueBlack;
+        m_storage_image->Sampler = m_device_context.Device.createSampler(sampler_ci);
 
         // fill descriptor
-        m_compute_storage_image->Descriptor.imageView = m_compute_storage_image->View;
-        m_compute_storage_image->Descriptor.sampler   = m_compute_storage_image->Sampler;
+        m_storage_image->Descriptor.imageView = m_storage_image->View;
+        m_storage_image->Descriptor.sampler   = m_storage_image->Sampler;
 
         // transition image to general layout on the host
-        m_device_context.Device.transitionImageLayout(vk::HostImageLayoutTransitionInfo{m_compute_storage_image->Handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral,
-                                                                                        vk::ImageSubresourceRange{m_compute_storage_image->Aspect, 0, 1, 0, 1}});
-        m_compute_storage_image->Descriptor.imageLayout = m_compute_storage_image->Layout = vk::ImageLayout::eGeneral;
+        m_device_context.Device.transitionImageLayout(
+                vk::HostImageLayoutTransitionInfo{m_storage_image->Handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, vk::ImageSubresourceRange{m_storage_image->Aspect, 0, 1, 0, 1}});
+        m_storage_image->Descriptor.imageLayout = m_storage_image->Layout = vk::ImageLayout::eGeneral;
     }
 
     void Renderer::update_descriptor_sets() {
         // descriptor sets for graphics
-        for (auto &descriptor_set: m_fullscreen_descriptor_sets) {
-            vk::DescriptorSetAllocateInfo gfx_alloc_info{m_descriptor_pool, {m_fullscreen_pipeline.DescriptorSetLayout}};
+        m_graphics_pass->DescriptorSets.resize(1);
+
+        for (auto &descriptor_set: m_graphics_pass->DescriptorSets[0]) {
+            vk::DescriptorSetAllocateInfo gfx_alloc_info{m_descriptor_pool, {m_graphics_pass->DescriptorSetLayout}};
             check(m_device_context.Device.allocateDescriptorSets(&gfx_alloc_info, &descriptor_set));
 
-            std::vector<vk::WriteDescriptorSet> gfx_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, m_compute_storage_image->Descriptor},
-                                                                             vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, m_compute_storage_image->Descriptor}};
+            std::vector gfx_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, m_storage_image->Descriptor},
+                                                     vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, m_storage_image->Descriptor}};
 
             m_device_context.Device.updateDescriptorSets(gfx_write_descriptor_sets, {});
         }
 
         // update descriptor sets for compute
-        vk::DescriptorSetAllocateInfo comp_alloc_info{m_descriptor_pool, {m_simple_compute_pipeline.DescriptorSetLayout}};
-        check(m_device_context.Device.allocateDescriptorSets(&comp_alloc_info, &m_simple_compute_descriptor_set));
+        m_compute_pass->DescriptorSets.resize(1);
 
-        std::vector<vk::WriteDescriptorSet> comp_write_descriptor_sets = {
-                vk::WriteDescriptorSet{m_simple_compute_descriptor_set, 0, 0, vk::DescriptorType::eStorageImage, m_compute_storage_image->Descriptor}};
+        for (auto &descriptor_set: m_compute_pass->DescriptorSets[0]) {
+            vk::DescriptorSetAllocateInfo comp_alloc_info{m_descriptor_pool, {m_compute_pass->DescriptorSetLayout}};
+            check(m_device_context.Device.allocateDescriptorSets(&comp_alloc_info, &descriptor_set));
 
-        m_device_context.Device.updateDescriptorSets(comp_write_descriptor_sets, {});
+            std::vector comp_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eStorageImage, m_storage_image->Descriptor}};
+
+            m_device_context.Device.updateDescriptorSets(comp_write_descriptor_sets, {});
+        }
     }
 
     void Renderer::fullscreen_render_pass() {
@@ -327,20 +325,18 @@ namespace vkdemo {
 
         cb.beginRendering(rendering_info);
 
-        cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Handle);
-        cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Layout, 0, {m_fullscreen_descriptor_sets[m_frame_context->Index]}, {});
-
+        cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphics_pass->Pipeline);
+        cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics_pass->PipelineLayout, 0, {m_graphics_pass->DescriptorSets[0][m_frame_context->Index]}, {});
         cb.draw(3, 1, 0, 0);
-
         cb.endRendering();
     }
 
     void Renderer::simple_compute_pass() {
         const auto &cb = m_frame_context->ComputeCB;
 
-        m_compute_storage_image->LayoutTransition(cb, vk::ImageLayout::eGeneral);
-        cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_simple_compute_pipeline.Handle);
-        cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_simple_compute_pipeline.Layout, 0, {m_simple_compute_descriptor_set}, {});
+        m_storage_image->LayoutTransition(cb, vk::ImageLayout::eGeneral);
+        cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_compute_pass->Pipeline);
+        cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_compute_pass->PipelineLayout, 0, {m_compute_pass->DescriptorSets[0][m_frame_context->Index]}, {});
         cb.dispatch(globals::kRenderExtent2D.width / 16, globals::kRenderExtent2D.height / 16, 1);
     }
 

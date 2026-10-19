@@ -2,7 +2,6 @@
 #define UTILS_HPP
 
 #include "globals.hpp"
-
 #include <iostream>
 #include <vulkan/vulkan.hpp>
 
