@@ -5,7 +5,6 @@
 namespace vkdemo {
     Image::~Image() {
         m_device_context.Device.destroyImageView(View);
-        m_device_context.Device.destroyImage(Handle);
 
         if (Allocation != nullptr) {
             vmaDestroyImage(m_device_context.VmaAllocator, Handle, Allocation);

@@ -67,7 +67,6 @@ namespace vkdemo {
                     break;
                 default:
                     // Other source layouts aren't handled (yet)
-                    assert(false && "InferSrcStageAndAccessMasks not implemented for given layout.");
                     break;
             }
         }

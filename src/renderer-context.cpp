@@ -12,9 +12,9 @@ namespace vkdemo {
 
     RendererContext::~RendererContext() {
         m_swapchain_images.clear();
+        m_device_context.Device.destroySwapchainKHR(m_swapchain);
         SDL_Vulkan_DestroySurface(m_device_context.Instance, m_surface, nullptr);
 
-        m_device_context.Device.destroySwapchainKHR(m_swapchain);
 
         // Let unique_ptr dispose these (out of scope destruction)
         DepthStencilAttachment = nullptr;
@@ -35,6 +35,7 @@ namespace vkdemo {
             m_device.destroySemaphore(m_compute_ready_semaphores[i]);
             m_device.destroySemaphore(m_compute_complete_semaphores[i]);
             m_device.destroyFence(m_graphics_fences[i]);
+            m_device.destroyFence(m_compute_fences[i]);
         }
     }
 
@@ -93,7 +94,7 @@ namespace vkdemo {
 
         // Submit command buffer to graphics queue
         // Wait for final write into color attachment and for compute to finish
-        std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eVertexInput};
+        std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eColorAttachmentOutput , vk::PipelineStageFlagBits::eVertexInput};
         std::vector                         wait_semaphores{m_image_acquired_semaphores[m_frame_index], m_compute_complete_semaphores[m_frame_index]};
         std::vector                         signal_semaphores{m_render_complete_semaphores[m_swapchain_image_index], m_compute_ready_semaphores[m_frame_index]};
 
@@ -119,9 +120,7 @@ namespace vkdemo {
         // Finish command buffer recording
         cb.end();
 
-        // The previous frame index is used because this is the index of the semaphore signalled by the graphics queue in the last frame
-        const int prev_frame_index = std::abs(static_cast<int>(m_frame_index) - 1) % globals::kFramesInFlight;
-        assert(prev_frame_index < globals::kFramesInFlight && prev_frame_index >= 0);
+        const uint32_t prev_frame_index = std::abs(static_cast<int>(m_frame_index) - 1) % globals::kFramesInFlight;
 
         std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eComputeShader};
         vk::SubmitInfo                      submit_info{{m_compute_ready_semaphores[prev_frame_index]}, wait_stage_mask, {cb}, {m_compute_complete_semaphores[m_frame_index]}};
@@ -177,8 +176,7 @@ namespace vkdemo {
         }
 
         // The first used compute ready semaphore must start signaled. First call into EndComputeCommands requires this to not block.
-        constexpr uint8_t index = globals::kFramesInFlight - 1;
-        vk::SubmitInfo    submit_info{{}, {}, {}, {m_compute_ready_semaphores[index]}};
+        vk::SubmitInfo    submit_info{{}, {}, {}, {m_compute_ready_semaphores[1]}};
         m_device_context.ComputeQueue.submit({submit_info}, nullptr);
     }
 

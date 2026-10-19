@@ -20,7 +20,7 @@ namespace vkdemo {
         vk::Format           Format{};
         VmaAllocation        Allocation{nullptr};
 
-        void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout);
+        virtual void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout);
 
     protected:
         const DeviceContext &m_device_context;

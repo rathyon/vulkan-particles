@@ -1,10 +1,19 @@
 #include "renderer.hpp"
 
+#include <SDL3/SDL.h>
+
 namespace vkdemo {
 
     Renderer::~Renderer() {
         m_device_context.Device.destroyPipelineLayout(m_fullscreen_pipeline.Layout);
         m_device_context.Device.destroyPipeline(m_fullscreen_pipeline.Handle);
+        m_device_context.Device.destroyDescriptorSetLayout(m_fullscreen_pipeline.DescriptorSetLayout);
+
+        m_device_context.Device.destroyPipelineLayout(m_simple_compute_pipeline.Layout);
+        m_device_context.Device.destroyPipeline(m_simple_compute_pipeline.Handle);
+        m_device_context.Device.destroyDescriptorSetLayout(m_simple_compute_pipeline.DescriptorSetLayout);
+
+        m_device_context.Device.destroyDescriptorPool(m_descriptor_pool);
     }
 
     void Renderer::Initialize(const Window &window) {
@@ -17,14 +26,13 @@ namespace vkdemo {
         m_shader_registry->Initialize();
         m_shader_registry->LoadShaders();
 
-        create_pipelines();
-
         prepare_resources();
+        create_pipelines();
     }
 
     void Renderer::RenderLoop() {
+        uint64_t last_time{ SDL_GetTicks() };
         bool stop = false;
-
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
 
@@ -33,26 +41,44 @@ namespace vkdemo {
             m_context->EndComputeCommands();
 
             m_context->BeginGraphicsCommands();
-            // fullscreen_render_pass();
+            fullscreen_render_pass();
             m_context->EndGraphicsCommands();
 
             m_context->EndFrame();
+
+            float elapsed_time{ static_cast<float>(SDL_GetTicks() - last_time) / 1000.0f };
+            last_time = SDL_GetTicks();
+            for (SDL_Event event; SDL_PollEvent(&event);) {
+                if (event.type == SDL_EVENT_QUIT) {
+                    stop = true;
+                    break;
+                }
+            }
         }
+
+        // call waitIdle to allow all commands to finish before shutting down
+        m_device_context.Device.waitIdle();
     }
 
     void Renderer::create_pipelines() {
         create_fullscreen_pipeline();
         create_compute_pipeline();
+        update_descriptor_sets();
     }
 
     void Renderer::create_fullscreen_pipeline() {
         // This fullscreen shader uses a technique described by Sascha Willems:
         // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
 
-        vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setLayoutCount = 0;
-        pipeline_layout_ci.pSetLayouts    = nullptr;
+        std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: input image
+                                                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eFragment},
+                                                                        // Binding 1: sampler
+                                                                        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}};
 
+        vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
+        m_fullscreen_pipeline.DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
+        pipeline_layout_ci.setSetLayouts(m_fullscreen_pipeline.DescriptorSetLayout);
         m_fullscreen_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_fullscreen_pipeline.Layout != nullptr);
 
@@ -139,9 +165,14 @@ namespace vkdemo {
     }
 
     void Renderer::create_compute_pipeline() {
+        std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: input image
+                                                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eCompute}};
+
+        vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
+        m_simple_compute_pipeline.DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setLayoutCount = 0;
-        pipeline_layout_ci.pSetLayouts    = nullptr;
+        pipeline_layout_ci.setSetLayouts(m_simple_compute_pipeline.DescriptorSetLayout);
 
         m_simple_compute_pipeline.Layout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_simple_compute_pipeline.Layout != nullptr);
@@ -159,6 +190,27 @@ namespace vkdemo {
     }
 
     void Renderer::prepare_resources() {
+        create_descriptor_pool();
+        create_images();
+    }
+
+    void Renderer::create_descriptor_pool() {
+        std::vector<vk::DescriptorPoolSize> pool_sizes = {// Input image in fullscreen pass
+                                                          vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage, globals::kFramesInFlight},
+                                                          // Sampler in fullscreen pass
+                                                          vk::DescriptorPoolSize{vk::DescriptorType::eSampler, globals::kFramesInFlight},
+                                                          // Image write in compute pass
+                                                          vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, globals::kFramesInFlight)};
+
+        vk::DescriptorPoolCreateInfo ci{};
+        ci.setPoolSizes(pool_sizes);
+        ci.maxSets = static_cast<uint32_t>(pool_sizes.size()) * globals::kFramesInFlight;
+
+        m_descriptor_pool = m_device_context.Device.createDescriptorPool(ci);
+        check(m_descriptor_pool != nullptr);
+    }
+
+    void Renderer::create_images() {
         static constexpr vk::Format kFormat = globals::kColorImageFormat;
 
         // This compute storage image will be drawn unto by a compute shader. Afterwards it will be read from in a fragment shader.
@@ -175,7 +227,8 @@ namespace vkdemo {
         create_info.arrayLayers = 1;
         create_info.samples     = vk::SampleCountFlagBits::e1;
         create_info.tiling      = vk::ImageTiling::eOptimal;
-        create_info.usage       = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage;
+        // Host transfer usage to allow host layout transitions
+        create_info.usage       = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eHostTransfer;
 
         // Optimization point: it would be more efficient to use exclusive and perform queue ownership transfers, but I don't have the time to do that right now
         const bool graphics_and_compute_same_family = m_device_context.GraphicsQueueFamily == m_device_context.ComputeQueueFamily;
@@ -184,19 +237,70 @@ namespace vkdemo {
         std::vector<uint32_t> queue_family_indices{m_device_context.GraphicsQueueFamily, m_device_context.ComputeQueueFamily};
         create_info.pQueueFamilyIndices = queue_family_indices.data();
 
-        m_compute_storage_image->Handle = m_device_context.Device.createImage(create_info);
+        m_compute_storage_image->Aspect = vk::ImageAspectFlagBits::eColor;
 
         VmaAllocationCreateInfo allocation_create_info{};
         allocation_create_info.usage    = VMA_MEMORY_USAGE_AUTO;
         allocation_create_info.flags    = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         allocation_create_info.priority = 1.0f;
 
-        vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&m_compute_storage_image->Handle),
-                       &m_compute_storage_image->Allocation, nullptr);
+        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&m_compute_storage_image->Handle),
+                       &m_compute_storage_image->Allocation, nullptr));
 
-        // todo create image view
-        // todo descriptor
-        // todo create sampler
+        // create image view
+        vk::ImageViewCreateInfo view_ci{};
+        view_ci.image                 = m_compute_storage_image->Handle;
+        view_ci.viewType              = vk::ImageViewType::e2D;
+        view_ci.format                = kFormat;
+        view_ci.subresourceRange      = vk::ImageSubresourceRange{m_compute_storage_image->Aspect, 0, 1, 0, 1};
+        m_compute_storage_image->View = m_device_context.Device.createImageView(view_ci);
+
+        // create sampler
+        vk::SamplerCreateInfo sampler_ci{};
+        sampler_ci.magFilter             = vk::Filter::eLinear;
+        sampler_ci.minFilter             = vk::Filter::eLinear;
+        sampler_ci.mipmapMode            = vk::SamplerMipmapMode::eLinear;
+        sampler_ci.addressModeU          = vk::SamplerAddressMode::eClampToBorder;
+        sampler_ci.addressModeV          = sampler_ci.addressModeU;
+        sampler_ci.addressModeW          = sampler_ci.addressModeU;
+        sampler_ci.mipLodBias            = 0.0f;
+        sampler_ci.maxAnisotropy         = 1.0f;
+        sampler_ci.compareOp             = vk::CompareOp::eNever;
+        sampler_ci.minLod                = 0.0f;
+        sampler_ci.maxLod                = 1.0f;
+        sampler_ci.borderColor           = vk::BorderColor::eFloatOpaqueBlack;
+        m_compute_storage_image->Sampler = m_device_context.Device.createSampler(sampler_ci);
+
+        // fill descriptor
+        m_compute_storage_image->Descriptor.imageView = m_compute_storage_image->View;
+        m_compute_storage_image->Descriptor.sampler   = m_compute_storage_image->Sampler;
+
+        // transition image to general layout on the host
+        m_device_context.Device.transitionImageLayout(vk::HostImageLayoutTransitionInfo{m_compute_storage_image->Handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral,
+                                                                                        vk::ImageSubresourceRange{m_compute_storage_image->Aspect, 0, 1, 0, 1}});
+        m_compute_storage_image->Descriptor.imageLayout = m_compute_storage_image->Layout = vk::ImageLayout::eGeneral;
+    }
+
+    void Renderer::update_descriptor_sets() {
+        // descriptor sets for graphics
+        for (auto &descriptor_set: m_fullscreen_descriptor_sets) {
+            vk::DescriptorSetAllocateInfo gfx_alloc_info{m_descriptor_pool, {m_fullscreen_pipeline.DescriptorSetLayout}};
+            check(m_device_context.Device.allocateDescriptorSets(&gfx_alloc_info, &descriptor_set));
+
+            std::vector<vk::WriteDescriptorSet> gfx_write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, m_compute_storage_image->Descriptor},
+                                                                             vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, m_compute_storage_image->Descriptor}};
+
+            m_device_context.Device.updateDescriptorSets(gfx_write_descriptor_sets, {});
+        }
+
+        // update descriptor sets for compute
+        vk::DescriptorSetAllocateInfo comp_alloc_info{m_descriptor_pool, {m_simple_compute_pipeline.DescriptorSetLayout}};
+        check(m_device_context.Device.allocateDescriptorSets(&comp_alloc_info, &m_simple_compute_descriptor_set));
+
+        std::vector<vk::WriteDescriptorSet> comp_write_descriptor_sets = {
+                vk::WriteDescriptorSet{m_simple_compute_descriptor_set, 0, 0, vk::DescriptorType::eStorageImage, m_compute_storage_image->Descriptor}};
+
+        m_device_context.Device.updateDescriptorSets(comp_write_descriptor_sets, {});
     }
 
     void Renderer::fullscreen_render_pass() {
@@ -224,6 +328,8 @@ namespace vkdemo {
         cb.beginRendering(rendering_info);
 
         cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Handle);
+        cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_fullscreen_pipeline.Layout, 0, {m_fullscreen_descriptor_sets[m_frame_context->Index]}, {});
+
         cb.draw(3, 1, 0, 0);
 
         cb.endRendering();
@@ -232,9 +338,10 @@ namespace vkdemo {
     void Renderer::simple_compute_pass() {
         const auto &cb = m_frame_context->ComputeCB;
 
+        m_compute_storage_image->LayoutTransition(cb, vk::ImageLayout::eGeneral);
         cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_simple_compute_pipeline.Handle);
-
-        // cb.dispatch();
+        cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_simple_compute_pipeline.Layout, 0, {m_simple_compute_descriptor_set}, {});
+        cb.dispatch(globals::kRenderExtent2D.width / 16, globals::kRenderExtent2D.height / 16, 1);
     }
 
 } // namespace vkdemo

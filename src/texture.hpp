@@ -11,6 +11,8 @@ namespace vkdemo {
         explicit Texture(const DeviceContext &device_context);
         ~Texture() override;
 
+        void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout) override;
+
         vk::DeviceMemory        DeviceMemory{};
         vk::DescriptorImageInfo Descriptor{};
         vk::Sampler             Sampler{};

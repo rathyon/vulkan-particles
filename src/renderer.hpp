@@ -19,8 +19,9 @@ namespace vkdemo {
 
     private:
         struct Pipeline {
-            vk::Pipeline       Handle;
-            vk::PipelineLayout Layout;
+            vk::Pipeline            Handle{};
+            vk::PipelineLayout      Layout{};
+            vk::DescriptorSetLayout DescriptorSetLayout{};
         };
 
         void create_pipelines();
@@ -28,6 +29,9 @@ namespace vkdemo {
         void create_compute_pipeline();
 
         void prepare_resources();
+        void create_descriptor_pool();
+        void create_images();
+        void update_descriptor_sets();
 
         void fullscreen_render_pass();
         void simple_compute_pass();
@@ -38,8 +42,12 @@ namespace vkdemo {
 
         FrameContext *m_frame_context = nullptr;
 
-        Pipeline m_fullscreen_pipeline{};
-        Pipeline m_simple_compute_pipeline{};
+        vk::DescriptorPool          m_descriptor_pool{};
+        Pipeline                    m_fullscreen_pipeline{};
+        Buffered<vk::DescriptorSet> m_fullscreen_descriptor_sets{};
+
+        Pipeline          m_simple_compute_pipeline{};
+        vk::DescriptorSet m_simple_compute_descriptor_set{};
 
         std::unique_ptr<Texture> m_compute_storage_image{};
     };
