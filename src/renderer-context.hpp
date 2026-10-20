@@ -20,20 +20,27 @@ namespace vkdemo {
         explicit RendererContext(const DeviceContext &device_context);
         virtual ~RendererContext();
 
-        void                        Initialize(const Window &window);
-        [[nodiscard]] FrameContext *BeginFrame();
-        void                        BeginGraphicsCommands();
-        void                        BeginComputeCommands();
-        void                        EndFrame();
-        void                        EndGraphicsCommands();
-        void                        EndComputeCommands();
+        void Initialize(const Window &window);
+
+        [[nodiscard]] FrameContext     *BeginFrame();
+        void                            BeginGraphicsCommands();
+        void                            BeginComputeCommands();
+        [[nodiscard]] vk::CommandBuffer CreateCommandBuffer(bool begin_recording, QueueType queue);
+        void                            EndFrame();
+        void                            EndGraphicsCommands();
+        void                            EndComputeCommands();
+
+        /// @brief Ends the command buffer's recording, submits it to a queue and waits on host for it to complete
+        /// @param cb Command buffer to flush
+        /// @note The command buffer is also destroyed
+        void FlushCommandBuffer(vk::CommandBuffer cb, QueueType queue) const;
 
         Buffered<std::unique_ptr<RenderAttachment>> MainColorAttachments{};
         std::unique_ptr<RenderAttachment>           DepthStencilAttachment{};
 
     private:
         void create_sync_objects();
-        void create_command_buffers();
+        void create_command_pools_and_buffers();
         void create_attachments();
         void create_swapchain(const Window &window);
         void copy_main_color_attachment_to_swapchain(vk::CommandBuffer cb);
@@ -52,11 +59,13 @@ namespace vkdemo {
         Buffered<vk::Semaphore> m_compute_ready_semaphores{};
         Buffered<vk::Semaphore> m_compute_complete_semaphores{};
 
-        vk::CommandPool             m_graphics_command_pool{};
+        // vk::CommandPool             m_graphics_command_pool{};
         Buffered<vk::CommandBuffer> m_graphics_command_buffers{};
 
-        vk::CommandPool             m_compute_command_pool{};
+        // vk::CommandPool             m_compute_command_pool{};
         Buffered<vk::CommandBuffer> m_compute_command_buffers{};
+
+        std::array<vk::CommandPool, 3> m_command_pools{};
 
         uint32_t               m_frame_index = 0;
         Buffered<FrameContext> m_frame_contexts{};

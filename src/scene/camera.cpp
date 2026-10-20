@@ -4,9 +4,9 @@
 #include "renderer-context.hpp"
 
 namespace vkdemo {
-    Camera::Camera(const DeviceContext& device_context, Type type) {
-        for (auto& buffer: UniformBuffers) {
-            buffer = std::make_unique<Buffer>(device_context, vk::BufferUsageFlagBits::eUniformBuffer, sizeof(UniformData));
+    Camera::Camera(const DeviceContext &device_context, Type type) {
+        for (auto &buffer: UniformBuffers) {
+            buffer = std::make_unique<Buffer>(device_context, vk::BufferUsageFlagBits::eUniformBuffer, true, sizeof(UniformData));
         }
     }
 
@@ -20,7 +20,7 @@ namespace vkdemo {
         UniformBufferData.ViewPos = glm::vec4(Position, 0.0f);
 
         // Orbit type camera transformation
-        UniformBufferData.ViewMatrix        = glm::lookAtLH(Position, LookAtPosition, globals::kUpAxis);
+        UniformBufferData.ViewMatrix = glm::lookAtLH(Position, LookAtPosition, globals::kUpAxis);
 
         // Update uniform data
         UniformBufferData.PerspectiveMatrix = glm::perspective(FovY, globals::kAspectRatio, Near, Far);

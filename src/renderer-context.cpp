@@ -21,8 +21,9 @@ namespace vkdemo {
             attachment = nullptr;
         }
 
-        m_device.destroyCommandPool(m_graphics_command_pool);
-        m_device.destroyCommandPool(m_compute_command_pool);
+        for (auto m_command_pool: m_command_pools) {
+            m_device.destroyCommandPool(m_command_pool);
+        }
 
         for (int i = 0; i < globals::kFramesInFlight; ++i) {
             m_device.destroySemaphore(m_image_acquired_semaphores[i]);
@@ -36,7 +37,7 @@ namespace vkdemo {
     void RendererContext::Initialize(const Window &window) {
         create_swapchain(window);
         create_sync_objects();
-        create_command_buffers();
+        create_command_pools_and_buffers();
         create_attachments();
 
         for (size_t i = 0; i < m_frame_contexts.size(); ++i) {
@@ -74,6 +75,21 @@ namespace vkdemo {
         cb.begin(vk::CommandBufferBeginInfo{});
     }
 
+    vk::CommandBuffer RendererContext::CreateCommandBuffer(const bool begin_recording, const QueueType queue) {
+        assert(queue != QueueType::Present  && "Cannot use Present queue for commands!");
+        vk::CommandBufferAllocateInfo command_buffer_ai{};
+        command_buffer_ai.commandPool        = m_command_pools[queue];
+        command_buffer_ai.commandBufferCount = 1;
+
+        vk::CommandBuffer command_buffer{};
+
+        check(m_device.allocateCommandBuffers(&command_buffer_ai, &command_buffer), "Failed to allocate command buffer");
+        if (begin_recording)
+            command_buffer.begin(vk::CommandBufferBeginInfo{});
+
+        return command_buffer;
+    }
+
     void RendererContext::EndFrame() { m_frame_index = (m_frame_index + 1) % globals::kFramesInFlight; }
 
     void RendererContext::EndGraphicsCommands() {
@@ -98,12 +114,12 @@ namespace vkdemo {
         submit_info.setCommandBuffers(cb);
         submit_info.setSignalSemaphores(signal_semaphores);
 
-        m_device_context.GraphicsQueue.submit({submit_info}, m_graphics_fences[m_frame_index]);
+        m_device_context.Queues[Graphics].submit({submit_info}, m_graphics_fences[m_frame_index]);
 
         // Present the swapchain via the present queue
         // By default VulkanHPP throws exception when result isn't Success. But throwing/catching exceptions isn't desired here so the C API is used.
         vk::PresentInfoKHR present_info{{m_swapchain->RenderCompleteSemaphores[m_swapchain_image_index]}, {m_swapchain->Handle}, {m_swapchain_image_index}};
-        auto               present_result = static_cast<vk::Result>(vkQueuePresentKHR(m_device_context.PresentQueue, present_info));
+        auto               present_result = static_cast<vk::Result>(vkQueuePresentKHR(m_device_context.Queues[Present], present_info));
         check(present_result == vk::Result::eSuccess, "Failed to present swapchain!");
     }
 
@@ -118,31 +134,56 @@ namespace vkdemo {
 
         std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eComputeShader};
         vk::SubmitInfo                      submit_info{{m_compute_ready_semaphores[prev_frame_index]}, wait_stage_mask, {cb}, {m_compute_complete_semaphores[m_frame_index]}};
-        m_device_context.ComputeQueue.submit({submit_info}, m_compute_fences[m_frame_index]);
+        m_device_context.Queues[Compute].submit({submit_info}, m_compute_fences[m_frame_index]);
     }
 
-    void RendererContext::create_command_buffers() {
-        // Create graphics buffers
+    void RendererContext::FlushCommandBuffer(const vk::CommandBuffer cb, const QueueType queue) const {
+        assert(queue != QueueType::Present  && "Cannot use Present queue for commands!");
+
+        if (cb == nullptr)
+            return;
+
+        cb.end();
+
+        // Create fence to wait on host for commands to finish
+        vk::Fence fence = m_device_context.Device.createFence({});
+
+        vk::SubmitInfo submit_info{};
+        submit_info.setCommandBuffers(cb);
+        m_device_context.Queues[queue].submit(submit_info, fence);
+
+        check(m_device_context.Device.waitForFences({fence}, true, kFenceTimeout));
+        m_device_context.Device.destroyFence(fence);
+        m_device_context.Device.freeCommandBuffers(m_command_pools[queue], cb);
+    }
+
+    void RendererContext::create_command_pools_and_buffers() {
+        // Create graphics pool & buffers
         vk::CommandPoolCreateInfo command_pool_ci{};
         command_pool_ci.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-        command_pool_ci.queueFamilyIndex = m_device_context.GraphicsQueueFamily;
+        command_pool_ci.queueFamilyIndex = m_device_context.QueueFamilies[Graphics];
 
-        m_graphics_command_pool = m_device.createCommandPool(command_pool_ci);
-        check(m_graphics_command_pool != nullptr, "Failed to create graphics command pool");
+        m_command_pools[Graphics] = m_device.createCommandPool(command_pool_ci);
+        check(m_command_pools[Graphics] != nullptr, "Failed to create graphics command pool");
 
         vk::CommandBufferAllocateInfo command_buffer_ai{};
-        command_buffer_ai.commandPool        = m_graphics_command_pool;
+        command_buffer_ai.commandPool        = m_command_pools[Graphics];
         command_buffer_ai.commandBufferCount = globals::kFramesInFlight;
 
         check(m_device.allocateCommandBuffers(&command_buffer_ai, m_graphics_command_buffers.data()), "Failed to allocate graphics command buffers");
 
-        // Create compute buffers
-        command_pool_ci.queueFamilyIndex = m_device_context.ComputeQueueFamily;
-        m_compute_command_pool           = m_device.createCommandPool(command_pool_ci);
-        check(m_compute_command_pool != nullptr, "Failed to create compute command pool");
+        // Create compute pool & buffers
+        command_pool_ci.queueFamilyIndex = m_device_context.QueueFamilies[Compute];
+        m_command_pools[Compute]         = m_device.createCommandPool(command_pool_ci);
+        check(m_command_pools[Compute] != nullptr, "Failed to create compute command pool");
 
-        command_buffer_ai.commandPool = m_compute_command_pool;
+        command_buffer_ai.commandPool = m_command_pools[Compute];
         check(m_device.allocateCommandBuffers(&command_buffer_ai, m_compute_command_buffers.data()), "Failed to allocate compute command buffers");
+
+        // Create transfer pool
+        command_pool_ci.queueFamilyIndex = m_device_context.QueueFamilies[Transfer];
+        m_command_pools[Transfer]        = m_device.createCommandPool(command_pool_ci);
+        check(m_command_pools[Transfer] != nullptr, "Failed to create compute command pool");
     }
 
     void RendererContext::create_sync_objects() {
@@ -166,7 +207,7 @@ namespace vkdemo {
 
         // The first used compute ready semaphore must start signaled. First call into EndComputeCommands requires this to not block.
         vk::SubmitInfo submit_info{{}, {}, {}, {m_compute_ready_semaphores[1]}};
-        m_device_context.ComputeQueue.submit({submit_info}, nullptr);
+        m_device_context.Queues[Compute].submit({submit_info}, nullptr);
     }
 
     void RendererContext::create_attachments() {

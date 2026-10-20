@@ -37,9 +37,18 @@ namespace vkdemo {
         void RenderLoop();
 
     private:
-        void create_render_passes();
-        void create_graphics_pass();
-        void create_compute_pass();
+        struct Particle {
+            glm::vec4 Position{};
+            glm::vec4 Velocity{};
+            glm::vec4 Color{};
+        };
+
+        void create_shader_passes();
+        void create_graphics_passes();
+        // void create_particle_draw_pass();
+        // void create_fullscreen_pass();
+        void create_compute_passes();
+        // void create_particle_compute_pass();
 
         void prepare_resources();
         void create_descriptor_pool();
@@ -49,7 +58,7 @@ namespace vkdemo {
 
         void simple_compute_pass();
         void particle_compute_pass();
-        void world_render_pass();
+        // void scene_render_pass();
         void fullscreen_render_pass();
 
         DeviceContext                    m_device_context{};

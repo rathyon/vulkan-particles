@@ -44,8 +44,8 @@ add_executable(vulkan_particles
         src/resource/swapchain.hpp
         src/resource/sampled-image.cpp
         src/resource/sampled-image.hpp
-        src/world/camera.cpp
-        src/world/camera.hpp
+        src/scene/camera.cpp
+        src/scene/camera.hpp
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})

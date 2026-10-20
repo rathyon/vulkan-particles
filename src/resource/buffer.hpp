@@ -9,7 +9,7 @@ namespace vkdemo {
 
     class Buffer {
     public:
-        explicit Buffer(const DeviceContext &context, vk::BufferUsageFlags usage_flags, uint64_t size);
+        explicit Buffer(const DeviceContext &context, vk::BufferUsageFlags usage_flags, bool host_access, uint64_t size);
         ~Buffer();
 
         Buffer(const Buffer &)             = delete;
@@ -17,9 +17,10 @@ namespace vkdemo {
         Buffer &operator=(const Buffer &)  = delete;
         Buffer &operator=(const Buffer &&) = delete;
 
-        vk::Buffer        Handle{};
-        VmaAllocation     Allocation{nullptr};
-        VmaAllocationInfo AllocationInfo{};
+        VmaAllocation            Allocation{nullptr};
+        VmaAllocationInfo        AllocationInfo{};
+        vk::DescriptorBufferInfo Descriptor{};
+        const uint64_t           Size;
 
     private:
         const DeviceContext &m_device_context;

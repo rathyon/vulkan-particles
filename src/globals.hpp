@@ -23,7 +23,9 @@ namespace vkdemo::globals {
     static constexpr std::string_view kFragmentEntryFunctionName    = "fs_main";
     static constexpr std::string_view kComputeEntryFunctionName     = "main";
     static constexpr glm::vec3        kUpAxis{0, 1, 0};
-    static constexpr float            kAspectRatio = 1920 / 1080;
+    static constexpr float            kAspectRatio = 1920.0f / 1080.0f;
+
+    static constexpr uint32_t kParticleCount = 1 << 10;
 
 } // namespace vkdemo::globals
 

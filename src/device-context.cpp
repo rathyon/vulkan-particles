@@ -5,6 +5,7 @@
 
 #include "globals.hpp"
 #include "util.hpp"
+#include "vk-util.hpp"
 #include "window.hpp"
 
 #include <SDL3/SDL_vulkan.h>
@@ -160,7 +161,7 @@ namespace vkdemo {
 
         // Initialize family indices with max uint value to represent null/none
         static constexpr uint32_t kFamilyNone = std::numeric_limits<uint32_t>::max();
-        GraphicsQueueFamily = ComputeQueueFamily = PresentQueueFamily = TransferQueueFamily = kFamilyNone;
+        std::ranges::fill(QueueFamilies, kFamilyNone);
 
         // Lambda function to help select queue families
         auto find_family = [&properties_list](const vk::QueueFlags flags, const vk::QueueFlags exclude_flags = {}) {
@@ -177,26 +178,26 @@ namespace vkdemo {
         };
 
         // Select graphics queue family (select the first one that appears) it should also include Compute
-        GraphicsQueueFamily = find_family(vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
-        check(GraphicsQueueFamily != kFamilyNone, "Failed to find Graphics queue family!");
+        QueueFamilies[Graphics] = find_family(vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
+        check(QueueFamilies[Graphics] != kFamilyNone, "Failed to find Graphics queue family!");
 
         // Select compute queue family. A family that supports Compute but not Graphics is preferred (dedicated Compute)
-        ComputeQueueFamily = find_family(vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics);
-        if (ComputeQueueFamily == kFamilyNone) {
+        QueueFamilies[Compute] = find_family(vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics);
+        if (QueueFamilies[Compute] == kFamilyNone) {
             std::cout << "Dedicated compute queue family not found. Using graphics family." << std::endl;
-            ComputeQueueFamily = GraphicsQueueFamily;
+            QueueFamilies[Compute] = QueueFamilies[Graphics];
         }
-        check(ComputeQueueFamily != kFamilyNone, "Failed to find Compute queue family!");
+        check(QueueFamilies[Compute] != kFamilyNone, "Failed to find Compute queue family!");
 
         // Select optimal transfer queue if it exists.
         // Find a Transfer queue. We try from best case to worst and by the one with the least amount of queues.
         // Best case: If it supports Transfer but not Graphics and Compute
-        TransferQueueFamily = find_family(vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
+        QueueFamilies[Transfer] = find_family(vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
         // Second-best case: If it supports Transfer but not Graphics
-        TransferQueueFamily = TransferQueueFamily != kFamilyNone ? TransferQueueFamily : find_family(vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics);
+        QueueFamilies[Transfer] = QueueFamilies[Transfer] != kFamilyNone ? QueueFamilies[Transfer] : find_family(vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics);
         // Fallback: use the graphics family. It is guaranteed to support transfer by the spec.
-        TransferQueueFamily = TransferQueueFamily != kFamilyNone ? TransferQueueFamily : GraphicsQueueFamily;
-        check(TransferQueueFamily != kFamilyNone, "Failed to find Present queue family.");
+        QueueFamilies[Transfer] = QueueFamilies[Transfer] != kFamilyNone ? QueueFamilies[Transfer] : QueueFamilies[Graphics];
+        check(QueueFamilies[Transfer] != kFamilyNone, "Failed to find Present queue family.");
 
         // Select present queue family
         for (auto property_it = properties_list.cbegin(); property_it != properties_list.cend(); ++property_it) {
@@ -207,21 +208,22 @@ namespace vkdemo {
             const uint32_t   family_index    = static_cast<uint32_t>(std::distance(properties_list.cbegin(), property_it));
             const vk::Bool32 present_support = SDL_Vulkan_GetPresentationSupport(Instance, PhysicalDevice, family_index);
             if (present_support) {
-                PresentQueueFamily = family_index;
+                QueueFamilies[Present] = family_index;
                 break;
             }
         }
-        check(PresentQueueFamily != kFamilyNone, "Failed to find Present queue family.");
+        check(QueueFamilies[Present] != kFamilyNone, "Failed to find Present queue family.");
 
         std::cout << "Selected queue families:\n"
-                  << "Graphics: " << GraphicsQueueFamily << "\nCompute: " << ComputeQueueFamily << "\nPresent: " << PresentQueueFamily << "\nTransfer: " << TransferQueueFamily << std::endl;
+                  << "Graphics: " << QueueFamilies[Graphics] << "\nCompute: " << QueueFamilies[Compute] << "\nPresent: " << QueueFamilies[Present] << "\nTransfer: " << QueueFamilies[Transfer]
+                  << std::endl;
     }
 
     void DeviceContext::create_logical_device() {
         select_queue_families();
 
         // Create a set of unique family indices (duplicates are discarded)
-        const std::unordered_set unique_queue_families{GraphicsQueueFamily, PresentQueueFamily, ComputeQueueFamily, TransferQueueFamily};
+        const std::unordered_set unique_queue_families{QueueFamilies[Graphics], QueueFamilies[Present], QueueFamilies[Compute], QueueFamilies[Transfer]};
         const std::vector        all_queue_priority{1.0f};
 
         std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
@@ -258,11 +260,11 @@ namespace vkdemo {
         device_create_info.setPEnabledExtensionNames(kRequiredDeviceExtensions);
         device_create_info.pNext = enabled_features;
 
-        Device        = PhysicalDevice.createDevice(device_create_info);
-        GraphicsQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, GraphicsQueueFamily});
-        PresentQueue  = Device.getQueue2(vk::DeviceQueueInfo2{{}, PresentQueueFamily});
-        ComputeQueue  = Device.getQueue2(vk::DeviceQueueInfo2{{}, ComputeQueueFamily});
-        TransferQueue = Device.getQueue2(vk::DeviceQueueInfo2{{}, TransferQueueFamily});
+        Device = PhysicalDevice.createDevice(device_create_info);
+
+        for (size_t i = 0; i < Queues.size(); ++i) {
+            Queues[i] = Device.getQueue2(vk::DeviceQueueInfo2{{}, QueueFamilies[i]});
+        }
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(Device);
     }

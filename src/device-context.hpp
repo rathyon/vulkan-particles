@@ -11,6 +11,7 @@
 #include <optional>
 
 namespace vkdemo {
+
     class DeviceContext {
     public:
         DeviceContext() = default;
@@ -24,15 +25,8 @@ namespace vkdemo {
         vk::PhysicalDevice PhysicalDevice;
         vk::Device         Device;
 
-        uint32_t GraphicsQueueFamily{};
-        uint32_t PresentQueueFamily{};
-        uint32_t ComputeQueueFamily{};
-        uint32_t TransferQueueFamily{};
-
-        vk::Queue GraphicsQueue;
-        vk::Queue PresentQueue;
-        vk::Queue ComputeQueue;
-        vk::Queue TransferQueue;
+        std::array<uint32_t, 4>  QueueFamilies{};
+        std::array<vk::Queue, 4> Queues{};
 
         VmaAllocator VmaAllocator{nullptr};
 

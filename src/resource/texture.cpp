@@ -28,10 +28,10 @@ namespace vkdemo {
         create_info.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eHostTransfer;
 
         // Optimization point: it would be more efficient to use exclusive and perform queue ownership transfers, but I don't have the time to do that right now
-        const bool graphics_and_compute_same_family = m_device_context.GraphicsQueueFamily == m_device_context.ComputeQueueFamily;
+        const bool graphics_and_compute_same_family = m_device_context.QueueFamilies[Graphics] == m_device_context.QueueFamilies[Compute];
         create_info.sharingMode                     = graphics_and_compute_same_family ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent;
         create_info.queueFamilyIndexCount           = graphics_and_compute_same_family ? 1 : 2;
-        std::vector<uint32_t> queue_family_indices{m_device_context.GraphicsQueueFamily, m_device_context.ComputeQueueFamily};
+        std::vector<uint32_t> queue_family_indices{m_device_context.QueueFamilies[Graphics], m_device_context.QueueFamilies[Compute]};
         create_info.pQueueFamilyIndices = queue_family_indices.data();
 
         VmaAllocationCreateInfo allocation_create_info{};

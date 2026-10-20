@@ -4,6 +4,8 @@
 #include <vulkan/vulkan.hpp>
 
 namespace vkdemo {
+    enum QueueType : uint8_t { Graphics, Compute, Transfer, Present };
+
     namespace vkutil {
         static void InferSrcStageAndAccessMasks(vk::ImageMemoryBarrier2 &barrier) {
             // Code from Sascha Willems: https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp

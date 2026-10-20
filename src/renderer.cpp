@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 
 #include <SDL3/SDL.h>
+#include <random>
 
 namespace vkdemo {
 
@@ -17,7 +18,7 @@ namespace vkdemo {
         m_shader_registry->LoadShaders();
 
         prepare_resources();
-        create_render_passes();
+        create_shader_passes();
     }
 
     void Renderer::RenderLoop() {
@@ -32,7 +33,7 @@ namespace vkdemo {
             m_context->EndComputeCommands();
 
             m_context->BeginGraphicsCommands();
-            world_render_pass();
+            // scene_render_pass();
             fullscreen_render_pass();
             m_context->EndGraphicsCommands();
 
@@ -52,13 +53,13 @@ namespace vkdemo {
         m_device_context.Device.waitIdle();
     }
 
-    void Renderer::create_render_passes() {
-        create_graphics_pass();
-        create_compute_pass();
+    void Renderer::create_shader_passes() {
+        create_graphics_passes();
+        create_compute_passes();
         update_descriptor_sets();
     }
 
-    void Renderer::create_graphics_pass() {
+    void Renderer::create_graphics_passes() {
         m_graphics_pass = std::make_unique<RenderPass>(m_device_context.Device);
 
         std::vector set_layout_bindings{// Binding 0: input image
@@ -157,7 +158,7 @@ namespace vkdemo {
         m_graphics_pass->Pipeline = result.value;
     }
 
-    void Renderer::create_compute_pass() {
+    void Renderer::create_compute_passes() {
         m_compute_pass = std::make_unique<RenderPass>(m_device_context.Device);
 
         std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: input image
@@ -207,9 +208,46 @@ namespace vkdemo {
     }
 
     void Renderer::create_buffers() {
-        for (auto& buffer: m_compute_storage_buffers) {
-            static_assert(false && "Resume from here tomorrow")
-            // buffer = std::make_unique<Buffer>(m_device_context, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst);
+        // todo define proper section for this
+        std::uniform_real_distribution<float> rndDist(-1.0f, 1.0f);
+
+        // Define initial particle states
+        std::vector<Particle> initial_particle_states{globals::kParticleCount};
+        // for (auto& particle : initial_particle_states) {
+        //     particle.Position = glm::vec4{0,0,0,0};
+        //     particle.Velocity = glm::vec4{0,0,0,0};
+        //     particle.Color = glm::vec4{1,1,1,1};
+        // }
+
+        // upload to staging buffer and then copy from staging onto device buffer
+        static constexpr uint64_t kBufferSize    = sizeof(Particle) * globals::kParticleCount;
+        auto                      staging_buffer = std::make_unique<Buffer>(m_device_context, vk::BufferUsageFlagBits::eTransferSrc, true, kBufferSize);
+        memcpy(staging_buffer->AllocationInfo.pMappedData, initial_particle_states.data(), kBufferSize);
+
+        for (auto &buffer: m_compute_storage_buffers) {
+            buffer = std::make_unique<Buffer>(m_device_context, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, false,
+                                              kBufferSize);
+
+            const vk::CommandBuffer upload_cb = m_context->CreateCommandBuffer(true, Transfer);
+
+            vk::BufferCopy copy_region{0, 0, buffer->Size};
+            upload_cb.copyBuffer(staging_buffer->Descriptor.buffer, buffer->Descriptor.buffer, {copy_region});
+
+            // Perform queue ownership transfer barrier from transfer to compute (if queues differ)
+            if (m_device_context.QueueFamilies[Transfer] != m_device_context.QueueFamilies[Compute]) {
+                vk::BufferMemoryBarrier barrier{};
+                barrier.srcAccessMask       = vk::AccessFlagBits::eTransferWrite;
+                barrier.dstAccessMask       = vk::AccessFlagBits::eNone;
+                barrier.srcQueueFamilyIndex = m_device_context.QueueFamilies[Transfer];
+                barrier.dstQueueFamilyIndex = m_device_context.QueueFamilies[Compute];
+                barrier.buffer              = buffer->Descriptor.buffer;
+                barrier.offset              = 0;
+                barrier.size                = buffer->Size;
+
+                upload_cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe, {}, {}, {barrier}, {});
+            }
+
+            m_context->FlushCommandBuffer(upload_cb, Transfer);
         }
     }
 
@@ -285,8 +323,6 @@ namespace vkdemo {
         cb.dispatch(globals::kRenderExtent2D.width / 16, globals::kRenderExtent2D.height / 16, 1);
     }
 
-    void Renderer::particle_compute_pass() {
-
-    }
+    void Renderer::particle_compute_pass() {}
 
 } // namespace vkdemo
