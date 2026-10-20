@@ -33,7 +33,7 @@ namespace vkdemo {
         alloc_info.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&color_create_info), &alloc_info, reinterpret_cast<VkImage *>(&Handle), &Allocation, nullptr),
+        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&color_create_info), &alloc_info, reinterpret_cast<VkImage *>(&Handle), &Allocation, &AllocationInfo),
               "Failed to create attachment");
 
         create_image_view();

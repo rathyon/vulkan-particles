@@ -22,6 +22,7 @@ namespace vkdemo {
         vk::ImageAspectFlags Aspect{};
         vk::Format           Format{};
         VmaAllocation        Allocation{nullptr};
+        VmaAllocationInfo    AllocationInfo{};
 
         virtual void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout);
 

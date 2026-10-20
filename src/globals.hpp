@@ -1,7 +1,8 @@
 #ifndef GLOBALS_HPP
 #define GLOBALS_HPP
 
-#include <glm/vec2.hpp>
+#include "glm-usage.hpp"
+
 #include <string_view>
 #include <vulkan/vulkan.hpp>
 
@@ -21,6 +22,8 @@ namespace vkdemo::globals {
     static constexpr std::string_view kVertexEntryFunctionName      = "vs_main";
     static constexpr std::string_view kFragmentEntryFunctionName    = "fs_main";
     static constexpr std::string_view kComputeEntryFunctionName     = "main";
+    static constexpr glm::vec3        kUpAxis{0, 1, 0};
+    static constexpr float            kAspectRatio = 1920 / 1080;
 
 } // namespace vkdemo::globals
 

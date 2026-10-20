@@ -27,10 +27,12 @@ namespace vkdemo {
             m_frame_context = m_context->BeginFrame();
 
             m_context->BeginComputeCommands();
-            simple_compute_pass();
+            // simple_compute_pass();
+            particle_compute_pass();
             m_context->EndComputeCommands();
 
             m_context->BeginGraphicsCommands();
+            world_render_pass();
             fullscreen_render_pass();
             m_context->EndGraphicsCommands();
 
@@ -184,6 +186,7 @@ namespace vkdemo {
 
     void Renderer::prepare_resources() {
         create_descriptor_pool();
+        create_buffers();
         create_images();
     }
 
@@ -201,6 +204,13 @@ namespace vkdemo {
 
         m_descriptor_pool = m_device_context.Device.createDescriptorPool(ci);
         check(m_descriptor_pool != nullptr);
+    }
+
+    void Renderer::create_buffers() {
+        for (auto& buffer: m_compute_storage_buffers) {
+            static_assert(false && "Resume from here tomorrow")
+            // buffer = std::make_unique<Buffer>(m_device_context, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst);
+        }
     }
 
     void Renderer::create_images() {
@@ -273,6 +283,10 @@ namespace vkdemo {
         cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_compute_pass->Pipeline);
         cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_compute_pass->PipelineLayout, 0, {m_compute_pass->DescriptorSets[0][m_frame_context->Index]}, {});
         cb.dispatch(globals::kRenderExtent2D.width / 16, globals::kRenderExtent2D.height / 16, 1);
+    }
+
+    void Renderer::particle_compute_pass() {
+
     }
 
 } // namespace vkdemo

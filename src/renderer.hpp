@@ -4,6 +4,7 @@
 #include "device-context.hpp"
 #include "renderer-context.hpp"
 #include "resource/texture.hpp"
+#include "resource/buffer.hpp"
 #include "shader-registry.hpp"
 
 namespace vkdemo {
@@ -36,19 +37,20 @@ namespace vkdemo {
         void RenderLoop();
 
     private:
-
-
         void create_render_passes();
         void create_graphics_pass();
         void create_compute_pass();
 
         void prepare_resources();
         void create_descriptor_pool();
+        void create_buffers();
         void create_images();
         void update_descriptor_sets();
 
-        void fullscreen_render_pass();
         void simple_compute_pass();
+        void particle_compute_pass();
+        void world_render_pass();
+        void fullscreen_render_pass();
 
         DeviceContext                    m_device_context{};
         std::unique_ptr<RendererContext> m_context;
@@ -56,12 +58,13 @@ namespace vkdemo {
 
         FrameContext *m_frame_context = nullptr;
 
-        vk::DescriptorPool        m_descriptor_pool{};
+        vk::DescriptorPool m_descriptor_pool{};
 
         std::unique_ptr<RenderPass> m_graphics_pass{};
         std::unique_ptr<RenderPass> m_compute_pass{};
 
-        std::unique_ptr<Texture> m_post_process_effect_texture{};
+        std::unique_ptr<Texture>          m_post_process_effect_texture{};
+        Buffered<std::unique_ptr<Buffer>> m_compute_storage_buffers{};
     };
 } // namespace vkdemo
 

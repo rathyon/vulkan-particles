@@ -39,7 +39,7 @@ namespace vkdemo {
         allocation_create_info.flags    = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         allocation_create_info.priority = 1.0f;
 
-        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&Handle), &Allocation, nullptr));
+        check(vmaCreateImage(m_device_context.VmaAllocator, reinterpret_cast<VkImageCreateInfo *>(&create_info), &allocation_create_info, reinterpret_cast<VkImage *>(&Handle), &Allocation, &AllocationInfo));
 
         create_image_view();
     }
