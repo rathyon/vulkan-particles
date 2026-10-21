@@ -233,9 +233,18 @@ namespace vkdemo {
             queue_create_infos.emplace_back(create_info);
         }
 
+        vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT dynamic_state3_features_ext{};
+        dynamic_state3_features_ext.extendedDynamicState3PolygonMode = true;
+
+        // Required due to lack of Slang support for writing PointSize
+        vk::PhysicalDeviceMaintenance5Features maintenance5_features{};
+        maintenance5_features.maintenance5 = true;
+        maintenance5_features.pNext = &dynamic_state3_features_ext;
+
         // Enable desired vulkan features
         vk::PhysicalDeviceHostImageCopyFeatures host_image_copy_features{};
         host_image_copy_features.hostImageCopy = true;
+        host_image_copy_features.pNext = &maintenance5_features;
 
         vk::PhysicalDeviceVulkan13Features enabled_vk13_features{};
         enabled_vk13_features.synchronization2 = true;

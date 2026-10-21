@@ -31,8 +31,11 @@ namespace vkdemo {
 
     private:
         static constexpr std::string_view kShaderFolder{"shader"};
-        const std::vector<std::string>    kShaderFilenames{"fullscreen.slang", "simple-compute.slang"};
-
+        const std::vector<std::string>    kShaderFilenames{
+                "particle-compute.slang",
+                "particle-draw.slang",
+                "postprocess.slang",
+        };
 
         static void print_diagnostics(const Slang::ComPtr<slang::IBlob> &blob, const std::string_view shader_name);
 

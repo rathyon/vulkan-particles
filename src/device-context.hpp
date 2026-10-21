@@ -36,10 +36,13 @@ namespace vkdemo {
         const std::vector<const char *> kRequiredLayers             = {"VK_LAYER_KHRONOS_validation"};
         const std::vector<const char *> kRequiredInstanceExtensions = {vk::EXTDebugUtilsExtensionName};
         const std::vector<const char *> kRequiredDeviceExtensions   = {
-                vk::KHRSwapchainExtensionName, vk::EXTMemoryBudgetExtensionName,
-                vk::EXTHostImageCopyExtensionName,       // Required for image copies on the host
-                vk::EXTScalarBlockLayoutExtensionName,   // Required for scalar block layouts (no padding)
-                vk::KHRShaderDrawParametersExtensionName // Required for using special semantic values in Slang shaders
+                vk::KHRSwapchainExtensionName,
+                vk::EXTMemoryBudgetExtensionName,
+                vk::EXTHostImageCopyExtensionName,        // Required for image copies on the host
+                vk::EXTScalarBlockLayoutExtensionName,    // Required for scalar block layouts (no padding)
+                vk::KHRShaderDrawParametersExtensionName, // Required for using special semantic values in Slang shaders
+                vk::KHRMaintenance5ExtensionName,          // Slang current doesn't allow writing PointSize, so this must be enabled to compensate (still can't write to it!)
+                vk::EXTExtendedDynamicState3ExtensionName
         };
 
         void               create_instance();

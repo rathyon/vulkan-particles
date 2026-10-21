@@ -12,6 +12,8 @@ include_directories(${Vulkan_INCLUDE_DIRS})
 find_library(SDL_LIBRARY NAMES SDL3 HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
+
 add_executable(vulkan_particles
         src/main.cpp
         src/device-context.hpp
@@ -36,21 +38,23 @@ add_executable(vulkan_particles
         src/resource/buffer.hpp
         src/resource/texture.cpp
         src/resource/texture.hpp
-        src/shader/fullscreen.slang
-        src/shader/simple-compute.slang
+        src/shader/postprocess.slang
+        src/shader/particle-compute.slang
+        src/shader/particle-draw.slang
         src/resource/render-attachment.cpp
         src/resource/render-attachment.hpp
         src/resource/swapchain.cpp
         src/resource/swapchain.hpp
         src/resource/sampled-image.cpp
         src/resource/sampled-image.hpp
-        src/scene/camera.cpp
-        src/scene/camera.hpp
+        src/world/camera.cpp
+        src/world/camera.hpp
 )
 
-target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES})
-target_link_libraries(vulkan_particles PRIVATE ${SDL_LIBRARY})
-target_link_libraries(vulkan_particles PRIVATE ${Slang_LIBRARY})
+target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES} ${SDL_LIBRARY} ${Slang_LIBRARY} -static)
+#target_link_libraries(vulkan_particles PRIVATE ${SDL_LIBRARY})
+#target_link_libraries(vulkan_particles PRIVATE ${Slang_LIBRARY})
+#target_link_libraries(vulkan_particles -static)
 
 # In case I want to use PCH
 #target_precompile_headers(vulkan_particles PRIVATE src/pch.hpp)

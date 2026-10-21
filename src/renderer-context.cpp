@@ -130,7 +130,7 @@ namespace vkdemo {
         // Finish command buffer recording
         cb.end();
 
-        const uint32_t prev_frame_index = std::abs(static_cast<int>(m_frame_index) - 1) % globals::kFramesInFlight;
+        const uint32_t prev_frame_index = (m_frame_index - 1 + globals::kFramesInFlight) % globals::kFramesInFlight;
 
         std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eComputeShader};
         vk::SubmitInfo                      submit_info{{m_compute_ready_semaphores[prev_frame_index]}, wait_stage_mask, {cb}, {m_compute_complete_semaphores[m_frame_index]}};

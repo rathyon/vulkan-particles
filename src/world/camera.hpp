@@ -19,7 +19,7 @@ namespace vkdemo {
         Camera &operator=(const Camera &)  = delete;
         Camera &operator=(const Camera &&) = delete;
 
-        void Update(const FrameContext &frame_context);
+        void Update(FrameContext *frame_context);
 
         glm::vec3 Rotation{};
         glm::vec3 Position{};
@@ -33,7 +33,7 @@ namespace vkdemo {
         struct UniformData {
             glm::mat4 PerspectiveMatrix{};
             glm::mat4 ViewMatrix{};
-            glm::vec4 ViewPos{};
+            glm::vec4 ViewPosition{};
         } UniformBufferData{};
 
         Buffered<std::unique_ptr<Buffer>> UniformBuffers{};

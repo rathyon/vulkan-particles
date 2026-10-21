@@ -10,7 +10,20 @@ namespace vkdemo {
         Format = type == RenderAttachmentType::Color ? globals::kColorAttachmentFormat : globals::kDepthStencilAttachmentFormat;
         Aspect = type == RenderAttachmentType::Color ? vk::ImageAspectFlagBits::eColor : vk::ImageAspectFlagBits::eDepth;
 
-        vk::ImageCreateInfo color_create_info{};
+        vk::ImageCreateInfo  color_create_info{};
+        vk::FormatProperties format_properties{};
+        m_device_context.PhysicalDevice.getFormatProperties(Format, &format_properties);
+        // Color attachments will be rendered into, sampled and copied to the swapchain image
+        if (type == RenderAttachmentType::Color) {
+            check(static_cast<bool>(format_properties.optimalTilingFeatures & (vk::FormatFeatureFlagBits::eSampledImage | vk::FormatFeatureFlagBits::eStorageImage)),
+                  "Device does not contain format capable of specified usage");
+            color_create_info.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc;
+        } else {
+            check(static_cast<bool>(format_properties.optimalTilingFeatures & (vk::FormatFeatureFlagBits::eDepthStencilAttachment)),
+                  "Device does not contain format capable of specified usage");
+            color_create_info.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+        }
+
         color_create_info.imageType   = vk::ImageType::e2D;
         color_create_info.format      = Format;
         color_create_info.extent      = globals::kRenderExtent3D;
@@ -18,14 +31,6 @@ namespace vkdemo {
         color_create_info.arrayLayers = 1;
         color_create_info.samples     = vk::SampleCountFlagBits::e1;
         color_create_info.tiling      = vk::ImageTiling::eOptimal;
-
-        // Color attachments will be rendered into, sampled and copied to the swapchain image
-        if (type == RenderAttachmentType::Color) {
-            color_create_info.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc;
-        } else {
-            color_create_info.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
-        }
-
         color_create_info.initialLayout = vk::ImageLayout::eUndefined;
 
         // Create image

@@ -1,9 +1,5 @@
-// Renders a full screen quad.
-// Uses a "fake fullscreen quad" technique described by Sascha Willems, described here:
-// https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
-
-Texture2D InputTexture;
-SamplerState Sampler;
+[[vk::binding(0, 0)]]Texture2D InputTexture;
+[[vk::binding(1, 0)]]SamplerState Sampler;
 
 struct VSInput
 {
@@ -28,5 +24,6 @@ VSOut vs_main(VSInput input)
 [shader("fragment")]
 float4 fs_main(VSOut input) : SV_Target
 {
+    // just passing through
     return InputTexture.Sample(Sampler, input.TexCoord);
 }

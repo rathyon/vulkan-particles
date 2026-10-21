@@ -13,7 +13,7 @@ namespace vkdemo {
 
         vk::FormatProperties format_properties{};
         m_device_context.PhysicalDevice.getFormatProperties(kFormat, &format_properties);
-        check(static_cast<bool>(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eStorageImage), "Device does not contain format capable of storage image");
+        check(static_cast<bool>(format_properties.optimalTilingFeatures & (vk::FormatFeatureFlagBits::eSampledImage | vk::FormatFeatureFlagBits::eStorageImage)), "Device does not contain format capable of specified usage");
 
         vk::ImageCreateInfo create_info{};
         create_info.imageType   = vk::ImageType::e2D;
