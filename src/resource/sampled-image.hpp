@@ -12,7 +12,6 @@ namespace vkdemo {
         SampledImage &operator=(const SampledImage &)  = delete;
         SampledImage &operator=(const SampledImage &&) = delete;
 
-        vk::ImageView           View{};
         vk::DescriptorImageInfo Descriptor{};
 
     protected:

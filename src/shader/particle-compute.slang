@@ -32,7 +32,5 @@ void main(uint3 GlobalInvocationID : SV_DispatchThreadID)
     // Emulates UV gradient color shader
     // ResultImage[GlobalInvocationID.xy] = float4((float)GlobalInvocationID.x / group_total.x, (float)GlobalInvocationID.y / group_total.y, 0, 1);
 
-    ParticlesOut[index].Position = ParticlesIn[index].Position;
-    ParticlesOut[index].Velocity = ParticlesIn[index].Velocity;
-    ParticlesOut[index].Color = ParticlesIn[index].Color;
+    ParticlesOut[index] = ParticlesIn[index];
 }

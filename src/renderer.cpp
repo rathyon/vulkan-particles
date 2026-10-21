@@ -42,7 +42,7 @@ namespace vkdemo {
 
             m_context->BeginGraphicsCommands();
             particle_draw_pass();
-            // postprocess_pass();
+            postprocess_pass();
             // todo DrawUI here
             m_context->EndGraphicsCommands();
 
@@ -124,24 +124,24 @@ namespace vkdemo {
         vk::PipelineRasterizationStateCreateInfo rasterization_state{{}, false, false, vk::PolygonMode::ePoint, vk::CullModeFlagBits::eNone, vk::FrontFace::eCounterClockwise};
         rasterization_state.lineWidth = 1.0f;
         vk::PipelineMultisampleStateCreateInfo multisample_state{{}, vk::SampleCountFlagBits::e1};
-        vk::PipelineColorBlendAttachmentState  color_blend_attachment_state{};
+
+        vk::PipelineColorBlendAttachmentState color_blend_attachment_state{};
         color_blend_attachment_state.blendEnable         = true;
-        color_blend_attachment_state.srcColorBlendFactor = vk::BlendFactor::eOne;
+        color_blend_attachment_state.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
         color_blend_attachment_state.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
         color_blend_attachment_state.colorBlendOp        = vk::BlendOp::eAdd;
         color_blend_attachment_state.srcAlphaBlendFactor = vk::BlendFactor::eOne;
         color_blend_attachment_state.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
         color_blend_attachment_state.alphaBlendOp        = vk::BlendOp::eAdd;
-        color_blend_attachment_state.alphaBlendOp        = vk::BlendOp::eAdd;
         color_blend_attachment_state.colorWriteMask      = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
 
-        vk::PipelineColorBlendStateCreateInfo   color_blend_state{{}, false, {}, 1, &color_blend_attachment_state};
+        vk::PipelineColorBlendStateCreateInfo   color_blend_state{{}, false, {}, {color_blend_attachment_state}};
         vk::PipelineDepthStencilStateCreateInfo depth_stencil_state{{}, false, false, vk::CompareOp::eAlways, false, false};
+        std::vector                             dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+        vk::PipelineDynamicStateCreateInfo      dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
 
-        std::vector<vk::DynamicState>      dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-        vk::PipelineDynamicStateCreateInfo dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
+        std::vector input_bindings = {vk::VertexInputBindingDescription{0, sizeof(Particle), vk::VertexInputRate::eVertex}};
 
-        std::vector                                      input_bindings   = {vk::VertexInputBindingDescription{0, sizeof(Particle), vk::VertexInputRate::eVertex}};
         std::vector<vk::VertexInputAttributeDescription> input_attributes = {
                 // Location 0 : Position
                 {0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, Position)},
@@ -250,7 +250,6 @@ namespace vkdemo {
         create_images();
     }
 
-
     void Renderer::prepare_starting_conditions() {
         std::mt19937 rng_engine{globals::kRNGSeed};
 
@@ -268,7 +267,7 @@ namespace vkdemo {
             // For now let's color the particles by starting position...
             particle.Color = glm::vec4{(particle.Position.x + 1.0f) / 2.0f, (particle.Position.y + 1.0f) / 2.0f, 0, 1};
 
-            std::cout << "Particle " << idx++ << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << std::endl;
+            // std::cout << "Particle " << idx++ << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << std::endl;
         }
     }
 
@@ -458,17 +457,15 @@ namespace vkdemo {
         cb.setViewport(0, {viewport});
         cb.setScissor(0, {scissor});
 
-        // auto &color_attachment = *m_post_process_effect_attachment;
-        auto &color_attachment = *m_context->MainColorAttachments[m_frame_context->Index];
+        auto &color_attachment = *m_post_process_effect_attachment;
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
 
         vk::RenderingAttachmentInfo color_attachment_info{};
-        color_attachment_info.imageView               = color_attachment.View;
-        color_attachment_info.imageLayout             = vk::ImageLayout::eColorAttachmentOptimal;
-        color_attachment_info.loadOp                  = vk::AttachmentLoadOp::eClear;
-        color_attachment_info.clearValue.color        = vk::ClearColorValue{0, 0, 0, 0};
-        color_attachment_info.clearValue.depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
-        color_attachment_info.storeOp                 = vk::AttachmentStoreOp::eStore;
+        color_attachment_info.imageView        = color_attachment.Descriptor.imageView;
+        color_attachment_info.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
+        color_attachment_info.loadOp           = vk::AttachmentLoadOp::eClear;
+        color_attachment_info.clearValue.color = vk::ClearColorValue{0.0f, 0.0f, 0.0f, 0.0f};
+        color_attachment_info.storeOp          = vk::AttachmentStoreOp::eStore;
 
         vk::RenderingInfo rendering_info{};
         rendering_info.renderArea.extent = globals::kRenderExtent2D;
@@ -512,7 +509,7 @@ namespace vkdemo {
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
 
         vk::RenderingAttachmentInfo color_attachment_info{};
-        color_attachment_info.imageView        = color_attachment.View;
+        color_attachment_info.imageView        = color_attachment.Descriptor.imageView;
         color_attachment_info.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
         color_attachment_info.loadOp           = vk::AttachmentLoadOp::eClear;
         color_attachment_info.clearValue.color = vk::ClearColorValue{0, 0, 0, 0};

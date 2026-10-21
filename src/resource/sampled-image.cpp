@@ -24,8 +24,8 @@ namespace vkdemo {
         check(Descriptor.sampler != nullptr);
     }
     SampledImage::~SampledImage() {
-        if (View != nullptr)
-            m_device_context.Device.destroyImageView(View);
+        if (Descriptor.imageView != nullptr)
+            m_device_context.Device.destroyImageView(Descriptor.imageView);
 
         m_device_context.Device.destroySampler(Descriptor.sampler);
     }
@@ -37,7 +37,6 @@ namespace vkdemo {
         view_ci.format           = Format;
         view_ci.subresourceRange = vk::ImageSubresourceRange{Aspect, 0, 1, 0, 1};
 
-        View                 = m_device_context.Device.createImageView(view_ci);
-        Descriptor.imageView = View;
+        Descriptor.imageView                 = m_device_context.Device.createImageView(view_ci);
     }
 } // namespace vkdemo

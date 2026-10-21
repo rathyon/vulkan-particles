@@ -20,8 +20,9 @@ namespace vkdemo {
         assert(globals::kWindowSize.x == swapchain_create_info.imageExtent.width && globals::kWindowSize.y == swapchain_create_info.imageExtent.height);
         swapchain_create_info.imageArrayLayers = 1;
         swapchain_create_info.imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
-        swapchain_create_info.preTransform     = vk::SurfaceTransformFlagBitsKHR::eIdentity;
+        swapchain_create_info.preTransform     = surface_capabilities.currentTransform;
         swapchain_create_info.compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+        swapchain_create_info.clipped = true;
 
         if constexpr (globals::kVSyncEnabled) {
             swapchain_create_info.presentMode = vk::PresentModeKHR::eMailbox; // V-SYNC, no screen tearing
