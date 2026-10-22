@@ -17,7 +17,7 @@ struct VSOutput
 {
     float4 Position : SV_POSITION;
     float4 Color;
-    float PointSize : SV_PointSize;
+    //float PointSize : SV_PointSize;
 };
 
 [shader("vertex")]
@@ -25,7 +25,7 @@ VSOutput vs_main(VSInput input){
     VSOutput output;
     output.Position = input.Position;
     output.Color = input.Color;
-    output.PointSize = 8.0;
+    //output.PointSize = 8.0;
     return output;
 }
 

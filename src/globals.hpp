@@ -19,9 +19,6 @@ namespace vkdemo::globals {
     static constexpr vk::Format       kColorAttachmentFormat        = vk::Format::eR8G8B8A8Unorm;
     static constexpr vk::Format       kDepthStencilAttachmentFormat = vk::Format::eD32SfloatS8Uint;
     static constexpr vk::Format       kColorImageFormat             = vk::Format::eR8G8B8A8Srgb;
-    static constexpr std::string_view kParticleComputeShaderName    = "particle-compute.slang";
-    static constexpr std::string_view kParticleDrawShaderName       = "particle-draw.slang";
-    static constexpr std::string_view kPostProcessShaderName        = "postprocess.slang";
     static constexpr std::string_view kVertexEntryFunctionName      = "vs_main";
     static constexpr std::string_view kFragmentEntryFunctionName    = "fs_main";
     static constexpr std::string_view kComputeEntryFunctionName     = "main";

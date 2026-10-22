@@ -6,11 +6,11 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR 1)
 
 include_directories(src)
 
-find_package(Vulkan REQUIRED)
-include_directories(${Vulkan_INCLUDE_DIRS})
-
+find_package(Vulkan REQUIRED glslc glslangValidator glslang SPIRV-Tools)
 find_library(SDL_LIBRARY NAMES SDL3 HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
+
+include_directories(${Vulkan_INCLUDE_DIRS})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 
@@ -52,12 +52,6 @@ add_executable(vulkan_particles
 )
 
 target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES} ${SDL_LIBRARY} ${Slang_LIBRARY} -static)
-#target_link_libraries(vulkan_particles PRIVATE ${SDL_LIBRARY})
-#target_link_libraries(vulkan_particles PRIVATE ${Slang_LIBRARY})
-#target_link_libraries(vulkan_particles -static)
-
-# In case I want to use PCH
-#target_precompile_headers(vulkan_particles PRIVATE src/pch.hpp)
 
 # Copy shader into directory of executable
 add_custom_command(

@@ -86,8 +86,8 @@ namespace vkdemo {
         m_compute_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_compute_pass->PipelineLayout != nullptr);
 
-        ShaderModule                     *shader_module = m_shader_registry->GetModule(globals::kParticleComputeShaderName.data());
-        vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, shader_module->Module, globals::kComputeEntryFunctionName.data()};
+        GlslShaderModule                     *shader_module = m_shader_registry->GetGlslModule("particle-compute.comp");
+        vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, shader_module->Module, "main"};
 
         vk::ComputePipelineCreateInfo pipeline_ci{};
         pipeline_ci.layout = m_compute_pass->PipelineLayout;
@@ -112,10 +112,11 @@ namespace vkdemo {
         m_particle_draw_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_particle_draw_pass->PipelineLayout != nullptr);
 
-        ShaderModule *shader_module = m_shader_registry->GetModule(globals::kParticleDrawShaderName.data());
+        GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("particle-draw.vert");
+        GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("particle-draw.frag");
 
-        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, shader_module->Module, globals::kVertexEntryFunctionName.data()},
-                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, shader_module->Module, globals::kFragmentEntryFunctionName.data()}};
+        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, "main"},
+                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, "main"}};
 
         // Particles will be rendered as points, their point size is defined in the shader
         vk::PipelineInputAssemblyStateCreateInfo input_assembly_state{{}, vk::PrimitiveTopology::ePointList, false};
@@ -191,10 +192,11 @@ namespace vkdemo {
 
         // The postprocess shader uses a technique described by Sascha Willems:
         // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
-        ShaderModule *shader_module = m_shader_registry->GetModule(globals::kPostProcessShaderName.data());
+        GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("postprocess.vert");
+        GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("postprocess.frag");
 
-        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, shader_module->Module, globals::kVertexEntryFunctionName.data()},
-                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, shader_module->Module, globals::kFragmentEntryFunctionName.data()}};
+        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, globals::kVertexEntryFunctionName.data()},
+                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, globals::kFragmentEntryFunctionName.data()}};
 
         vk::PipelineInputAssemblyStateCreateInfo input_assembly_state{{}, vk::PrimitiveTopology::eTriangleList, false};
         vk::PipelineViewportStateCreateInfo      viewport_state{{}, 1, {}, 1, {}};
