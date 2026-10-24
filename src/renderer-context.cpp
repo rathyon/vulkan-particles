@@ -133,6 +133,8 @@ namespace vkdemo {
         const uint32_t prev_frame_index = (m_frame_index - 1 + globals::kFramesInFlight) % globals::kFramesInFlight;
 
         std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eComputeShader};
+
+        // This compute frame needs the previous compute frame to complete (need previous particle data)
         vk::SubmitInfo                      submit_info{{m_compute_ready_semaphores[prev_frame_index]}, wait_stage_mask, {cb}, {m_compute_complete_semaphores[m_frame_index]}};
         m_device_context.Queues[Compute].submit({submit_info}, m_compute_fences[m_frame_index]);
     }

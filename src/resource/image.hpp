@@ -9,7 +9,7 @@ namespace vkdemo {
 
     class Image {
     public:
-        explicit Image(const DeviceContext &device_context) : m_device_context(device_context) {};
+        explicit Image(const DeviceContext &device_context) : m_device_context(device_context) {}
         virtual ~Image();
 
         Image(const Image &)             = delete;
@@ -18,11 +18,11 @@ namespace vkdemo {
         Image &operator=(const Image &&) = delete;
 
         vk::Image            Handle{};
+        VmaAllocation        Allocation{nullptr};
+        VmaAllocationInfo    AllocationInfo{};
         vk::ImageLayout      Layout{vk::ImageLayout::eUndefined};
         vk::ImageAspectFlags Aspect{};
         vk::Format           Format{};
-        VmaAllocation        Allocation{nullptr};
-        VmaAllocationInfo    AllocationInfo{};
 
         virtual void LayoutTransition(const vk::CommandBuffer &cb, vk::ImageLayout new_layout);
 

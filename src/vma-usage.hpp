@@ -1,7 +1,7 @@
 #ifndef VMA_USAGE_HPP
 #define VMA_USAGE_HPP
 
-// suppress clang warnings for VMA
+// suppress clang warnings for VMA (clang-cl)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-completeness"
 

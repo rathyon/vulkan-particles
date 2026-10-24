@@ -1,6 +1,7 @@
 #include "shader-registry.hpp"
 
 #include <glslang/Public/ShaderLang.h>
+#include <glslang/SPIRV/GlslangToSpv.h>
 #include "device-context.hpp"
 #include "util.hpp"
 
@@ -78,9 +79,8 @@ namespace vkdemo {
     }
 
     void ShaderRegistry::load_glsl(const std::filesystem::path &filepath) {
-        const std::string &filename  = filepath.filename().string();
+        static constexpr int kGLSLVersion = 450;
         const std::string &extension = filepath.extension().string();
-
 
         std::string source{};
         try {
@@ -110,49 +110,40 @@ namespace vkdemo {
         }
 
         glslang::TShader shader{language};
-        shader.setStrings(reinterpret_cast<const char *const *>(source.data()), 1);
+        shader.setSourceFile(source.data());
+        // shader.setStrings(reinterpret_cast<const char *const *>(source.data()), 1);
 
-        shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 450);
+        shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, kGLSLVersion);
         shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EShTargetClientVersion::EShTargetVulkan_1_4);
         shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_6);
 
         TBuiltInResource res{};
-        if (shader.parse(&res, 450, true, EShMsgDefault) == false) {
+        if (shader.parse(&res, kGLSLVersion, true, EShMsgDefault) == false) {
             std::cerr << std::format("Failed to parse GLSL shader {}.", filepath.string());
         }
 
         glslang::TProgram program{};
         program.addShader(&shader);
         if (program.link(EShMessages::EShMsgDefault) == false) {
-            std::cerr << std::format("Failed to parse GLSL shader {}.", filepath.string());
+            std::cerr << std::format("Failed to parse GLSL shader {}: {}", filepath.string(), program.getInfoLog());
         }
-        // std::cout << shader.getInfoLog() << std::endl;
 
-        //
-        //
-        // shaderc::Compiler       compiler;
-        // shaderc::CompileOptions options;
-        // if (kOptimizeGLSL)
-        //     options.SetOptimizationLevel(shaderc_optimization_level_size);
-        //
-        // shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, kind, filename.c_str(), options);
-        //
-        // if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-        //     std::cerr << std::format("Failed to compile GLSL to SPIR-V. Error: {}", module.GetErrorMessage());
-        //     return;
-        // }
-        //
-        // GlslShaderModule glsl_module{};
-        // glsl_module.Binary = std::vector(module.cbegin(), module.cend());
+        glslang::TIntermediate* intermediate = program.getIntermediate(language);
+        GlslShaderModule glsl_module{};
 
-        // vk::ShaderModuleCreateInfo shader_module_ci{};
-        // shader_module_ci.codeSize = glsl_module.Binary.size();
-        // shader_module_ci.pCode    = glsl_module.Binary.data();
-        //
-        // glsl_module.Module = m_device_context.Device.createShaderModule(shader_module_ci, nullptr);
-        // check(glsl_module.Module != VK_NULL_HANDLE, "Failed to create shader module for shader " + filename);
-        //
-        // m_glsl_shader_modules.emplace(filename, std::move(glsl_module));
+        // todo set options
+        glslang::SpvOptions options{};
+        glslang::GlslangToSpv(*intermediate, glsl_module.Binary, &options);
+
+        vk::ShaderModuleCreateInfo shader_module_ci{};
+        shader_module_ci.codeSize = glsl_module.Binary.size();
+        shader_module_ci.pCode    = glsl_module.Binary.data();
+
+        glsl_module.Module = m_device_context.Device.createShaderModule(shader_module_ci, nullptr);
+
+        const std::string          &filename = filepath.filename().string();
+        check(glsl_module.Module != VK_NULL_HANDLE, "Failed to create shader module for shader " + filename);
+        m_glsl_shader_modules.emplace(filename, std::move(glsl_module));
     }
 
     void ShaderRegistry::load_slang(const std::filesystem::path &filepath) {

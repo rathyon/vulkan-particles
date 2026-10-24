@@ -2,11 +2,18 @@ cmake_minimum_required(VERSION 4.3)
 project(vulkan_particles)
 
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_COMPILE_WARNING_AS_ERROR 1)
+
+# Using MSVC, set warnings as errors
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -WX")
+
+# Using clang-cl, set warnings as errors
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-c++98-compat -Wno-switch-enum -Wno-lifetime-safety-cross-tu-constructor-suggestions -Wno-padded -Wno-lifetime-safety-intra-tu-constructor-suggestions")
 
 include_directories(src)
 
-find_package(Vulkan REQUIRED glslc glslangValidator glslang SPIRV-Tools)
+# Note: for some strange reason, it seems SPIRV-Tools is dependent on shaderc in the Vulkan SDK for Windows
+find_package(Vulkan REQUIRED glslang SPIRV-Tools shaderc_combined)
+
 find_library(SDL_LIBRARY NAMES SDL3 HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 
@@ -51,7 +58,7 @@ add_executable(vulkan_particles
         src/world/camera.hpp
 )
 
-target_link_libraries(vulkan_particles PRIVATE ${Vulkan_LIBRARIES} ${SDL_LIBRARY} ${Slang_LIBRARY} -static)
+target_link_libraries(vulkan_particles PRIVATE Vulkan::Vulkan ${SDL_LIBRARY} ${Slang_LIBRARY} Vulkan::glslang Vulkan::SPIRV-Tools Vulkan::shaderc_combined)
 
 # Copy shader into directory of executable
 add_custom_command(
