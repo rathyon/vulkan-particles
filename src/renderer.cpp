@@ -268,10 +268,12 @@ namespace vkdemo {
             particle.Position.x = uniform_distribution(rng_engine);
             particle.Position.y = uniform_distribution(rng_engine);
 
-            particle.Velocity = glm::vec4{0, 0, 0, 0};
+            // particle.Velocity = glm::vec4{0, 0, 0, 0};
+            particle.Velocity.x = uniform_distribution(rng_engine);
+            particle.Velocity.y = uniform_distribution(rng_engine);
 
             // For now let's color the particles by starting position...
-            particle.Color = glm::vec4{(particle.Position.x + 1.0f) / 2.0f, (particle.Position.y + 1.0f) / 2.0f, 0, 1};
+            particle.Color = glm::vec4{(particle.Position.x + 1.0f) / 2.0f, (particle.Position.y + 1.0f) / 2.0f, 0.5f, 1};
 
             if constexpr (kLogParticleStartingConditions)
                 log_string << "Particle " << idx++ << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << "\n";

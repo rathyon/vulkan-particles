@@ -12,6 +12,8 @@
 
 namespace vkdemo {
 
+    /// @brief Class that represents the Vulkan context for a given GPU. Handles initializing the Vulkan library, Vulkan extensions and choosing a (single) GPU.
+    /// This context object is passed onto most objects that interact with vulkan as a dependency-injection style pattern.
     class DeviceContext {
     public:
         DeviceContext() = default;

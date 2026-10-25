@@ -10,6 +10,7 @@
 namespace vkdemo {
     class Window;
 
+    /// @brief Utility class used for simplifying and wrapping a "pass".
     class RenderPass {
     public:
         RenderPass(vk::Device device) : m_device(device) {}
@@ -28,6 +29,7 @@ namespace vkdemo {
         vk::Device m_device;
     };
 
+    /// @brief Class that defines and runs all the render and compute operations, as well as any startup initializations.
     class Renderer {
     public:
         Renderer() = default;

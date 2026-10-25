@@ -1,3 +1,4 @@
+/// Header used for including GLM as it wraps certain defines in it. All GLM includes should instead include this header.
 #ifndef GLM_USAGE_HPP
 #define GLM_USAGE_HPP
 

@@ -54,6 +54,8 @@ namespace vkdemo {
         session_desc.compilerOptionEntryCount = options.size();
 
         check(m_slang_global_session->createSession(session_desc, m_vulkan_session.writeRef()) >= 0, "Failed to create vulkan slang session");
+
+        m_initialized = true;
     }
 
     SlangShaderModule *ShaderRegistry::GetSlangModule(const std::string &name) {
@@ -71,6 +73,11 @@ namespace vkdemo {
     }
 
     void ShaderRegistry::LoadShaders() {
+        if (!m_initialized) {
+            assert(m_initialized && "Could not load shaders: ShaderRegistry was not initialized. Did you forget to initialize it?");
+            throw std::runtime_error("Could not load shaders: ShaderRegistry was not initialized. Did you forget to initialize it?");
+        }
+
         for (const auto &shader_filename: kShaderFilenames) {
             std::filesystem::path shader_filepath = std::filesystem::path(kShaderFolder) / shader_filename;
 

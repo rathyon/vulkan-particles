@@ -35,5 +35,12 @@ void main() {
         return;
     }
 
-    ParticlesOut[index] = ParticlesIn[index];
+    // Update position
+    ParticlesOut[index].Position.xy = ParticlesIn[index].Position.xy + ParticlesIn[index].Velocity.xy;
+
+    // Reflect velocity if hits boundary
+    if(abs(ParticlesOut[index].Position.x) > 1 || abs(ParticlesOut[index].Position.y) > 1)
+            ParticlesOut[index].Velocity = -ParticlesIn[index].Velocity;
+
+    // ParticlesOut[index] = ParticlesIn[index];
 }

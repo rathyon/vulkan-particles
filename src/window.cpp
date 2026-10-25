@@ -11,7 +11,7 @@ namespace vkdemo {
         check(SDL_Vulkan_LoadLibrary(nullptr), "Failed to load Vulkan loader library");
         m_sdl_window = SDL_CreateWindow(globals::kApplicationName.data(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
         check(m_sdl_window, "Failed to create SDL window");
-        check(SDL_GetWindowSize(m_sdl_window, &m_size.x, &m_size.y), "Failed to get window size for SDL window");
+        check(SDL_GetWindowSizeInPixels(m_sdl_window, &m_size.x, &m_size.y), "Failed to get window size for SDL window");
     }
 
     Window::~Window() {

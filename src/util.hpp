@@ -1,3 +1,5 @@
+/// Contains miscellaneous utilities for the application
+
 #ifndef UTILS_HPP
 #define UTILS_HPP
 

@@ -6,12 +6,21 @@
 #include "glm-usage.hpp"
 
 namespace vkdemo {
+
+    /// @brief Container for Window related functionalities. Also allows for the creation of Vulkan surfaces and swapchains.
     class Window {
     public:
         Window(uint32_t width, uint32_t height);
         ~Window();
 
-        [[nodiscard]] bool       CreateSurface(const vk::Instance &instance, vk::SurfaceKHR &surface) const;
+        /// @brief Creates a vulkan rendering surface for this window.
+        /// @param instance The vulkan instance to create the surface for.
+        /// @param surface The surface handle to write to.
+        /// @return True if the surface was created, false otherwise.
+        [[nodiscard]] bool CreateSurface(const vk::Instance &instance, vk::SurfaceKHR &surface) const;
+
+        /// @brief Returns the client size of the window, in pixels.
+        /// @return The client size, in pixels.
         [[nodiscard]] glm::ivec2 Size() const noexcept;
 
     private:

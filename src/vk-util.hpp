@@ -1,3 +1,5 @@
+/// Contains miscellaneous utilities specific to Vulkan
+
 #ifndef VKUTIL_HPP
 #define VKUTIL_HPP
 
@@ -7,6 +9,8 @@ namespace vkdemo {
     enum QueueType : uint8_t { Graphics, Compute, Transfer, Present };
 
     namespace vkutil {
+        /// @brief Attempts to infer the source stage and access masks for a given image memory barrier. Useful for most barriers.
+        /// @param barrier The barrier.
         static void InferSrcStageAndAccessMasks(vk::ImageMemoryBarrier2 &barrier) {
             // Code from Sascha Willems: https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp
 
@@ -73,6 +77,8 @@ namespace vkdemo {
             }
         }
 
+        /// @brief Attempts to infer the destination stage and access masks for a given image memory barrier. Useful for most barriers.
+        /// @param barrier The barrier.
         static void InferDstStageAndAccessMasks(vk::ImageMemoryBarrier2 &barrier) {
             // Code from Sascha Willems: https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp
             // Target layouts (new)

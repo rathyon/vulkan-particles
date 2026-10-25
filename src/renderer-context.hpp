@@ -9,12 +9,15 @@ namespace vkdemo {
     class DeviceContext;
     class Swapchain;
 
+    /// @brief Holds data related to a frame, such as its index and command buffers.
     struct FrameContext {
         uint32_t          Index = 0;
         vk::CommandBuffer GraphicsCB{};
         vk::CommandBuffer ComputeCB{};
     };
 
+    /// @brief Class that holds the context backbone for the Renderer. This includes synchronization primitives, command buffers, main attachments and the swap-chain.
+    /// A sort of bridge between the Renderer and the DeviceContext.
     class RendererContext {
     public:
         explicit RendererContext(const DeviceContext &device_context);
