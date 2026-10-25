@@ -20,6 +20,10 @@ namespace vkdemo {
             m_device_context.Device.destroyShaderModule(module.Module);
         }
 
+        for (const auto &module: m_glsl_shader_modules | std::views::values) {
+            m_device_context.Device.destroyShaderModule(module.Module);
+        }
+
         slang::shutdown();
         glslang::FinalizeProcess();
     }

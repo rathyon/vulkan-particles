@@ -259,7 +259,11 @@ namespace vkdemo {
         std::uniform_real_distribution<float> uniform_distribution(-1.0f, 1.0f);
         std::normal_distribution<float>       normal_distribution(0, 0.5f);
 
+        std::stringstream log_string{};
         uint32_t idx = 0;
+
+        static constexpr bool kLogParticleStartingConditions = false;
+
         for (auto &particle: m_starting_particle_states) {
             particle.Position.x = uniform_distribution(rng_engine);
             particle.Position.y = uniform_distribution(rng_engine);
@@ -269,8 +273,12 @@ namespace vkdemo {
             // For now let's color the particles by starting position...
             particle.Color = glm::vec4{(particle.Position.x + 1.0f) / 2.0f, (particle.Position.y + 1.0f) / 2.0f, 0, 1};
 
-            // std::cout << "Particle " << idx++ << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << std::endl;
+            if constexpr (kLogParticleStartingConditions)
+                log_string << "Particle " << idx++ << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << "\n";
         }
+
+        if constexpr (kLogParticleStartingConditions)
+            std::cout << log_string.str() << std::endl;
     }
 
     void Renderer::create_descriptor_pool() {
