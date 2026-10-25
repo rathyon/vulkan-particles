@@ -16,6 +16,7 @@ find_package(Vulkan REQUIRED glslang SPIRV-Tools shaderc_combined)
 
 find_library(SDL_LIBRARY NAMES SDL3 HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
+find_library(glslang-default-resource-limits_LIBRARY NAMES glslang-default-resource-limits HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 
 include_directories(${Vulkan_INCLUDE_DIRS})
 
@@ -45,9 +46,6 @@ add_executable(vulkan_particles
         src/resource/buffer.hpp
         src/resource/texture.cpp
         src/resource/texture.hpp
-        src/shader/postprocess.slang
-        src/shader/particle-compute.slang
-        src/shader/particle-draw.slang
         src/resource/render-attachment.cpp
         src/resource/render-attachment.hpp
         src/resource/swapchain.cpp
@@ -59,10 +57,17 @@ add_executable(vulkan_particles
 )
 
 target_link_libraries(vulkan_particles PRIVATE Vulkan::Vulkan ${SDL_LIBRARY} ${Slang_LIBRARY} Vulkan::glslang Vulkan::SPIRV-Tools Vulkan::shaderc_combined)
+target_link_libraries(vulkan_particles PRIVATE
+        debug "$ENV{VULKAN_SDK}/lib/glslang-default-resource-limitsd.lib"
+        optimized "$ENV{VULKAN_SDK}/lib/glslang-default-resource-limits.lib")
 
-# Copy shader into directory of executable
-add_custom_command(
-        TARGET vulkan_particles
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E
-        copy_directory ${CMAKE_SOURCE_DIR}/src/shader/ $<TARGET_FILE_DIR:vulkan_particles>/shader/)
+
+# Copy shaders into directory of executable
+add_custom_target(copy_shaders ALL
+COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/src/shader/
+        $<TARGET_FILE_DIR:vulkan_particles>/shader/
+        COMMENT "Copying shaders files into bin/shaders"
+)
+
+add_dependencies(vulkan_particles  copy_shaders)

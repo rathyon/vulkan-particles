@@ -12,7 +12,6 @@
 
 
 namespace vkdemo {
-
     ShaderRegistry::ShaderRegistry(const DeviceContext &device_context) : m_device_context(device_context) {}
 
     ShaderRegistry::~ShaderRegistry() {
@@ -73,14 +72,16 @@ namespace vkdemo {
 
             if (shader_filepath.extension() == ".slang")
                 load_slang(shader_filepath);
-            else
-                load_glsl(shader_filepath);
+            else {
+                const TBuiltInResource *default_built_in_resources = GetDefaultResources();
+                load_glsl(shader_filepath, default_built_in_resources);
+            }
         }
     }
 
-    void ShaderRegistry::load_glsl(const std::filesystem::path &filepath) {
-        static constexpr int kGLSLVersion = 450;
-        const std::string &extension = filepath.extension().string();
+    void ShaderRegistry::load_glsl(const std::filesystem::path &filepath, const TBuiltInResource* built_in_resources) {
+        static constexpr int kGLSLVersion = glslang::EShTargetClientVersion::EShTargetOpenGL_450;
+        const std::string   &extension    = filepath.extension().string();
 
         std::string source{};
         try {
@@ -97,6 +98,7 @@ namespace vkdemo {
             return;
         }
 
+
         EShLanguage language;
         if (extension == ".vert")
             language = EShLangVertex;
@@ -110,38 +112,45 @@ namespace vkdemo {
         }
 
         glslang::TShader shader{language};
-        shader.setSourceFile(source.data());
-        // shader.setStrings(reinterpret_cast<const char *const *>(source.data()), 1);
+        shader.setDebugInfo(true); // todo make this a setting
+        const char *str = source.c_str();
+        shader.setStrings(&str, 1);
 
-        shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, kGLSLVersion);
+        shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientOpenGL, kGLSLVersion);
         shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EShTargetClientVersion::EShTargetVulkan_1_4);
         shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_6);
 
-        TBuiltInResource res{};
-        if (shader.parse(&res, kGLSLVersion, true, EShMsgDefault) == false) {
-            std::cerr << std::format("Failed to parse GLSL shader {}.", filepath.string());
+        if (shader.parse(built_in_resources, kGLSLVersion, false, EShMsgDefault) == false) {
+            const auto message = std::format("Failed to parse GLSL shader {}\nInfo: {}\nDebug Info: {}", filepath.string(), shader.getInfoLog(), shader.getInfoDebugLog());
+            std::cerr << message << std::endl;
+            throw std::runtime_error(message);
         }
 
         glslang::TProgram program{};
         program.addShader(&shader);
         if (program.link(EShMessages::EShMsgDefault) == false) {
-            std::cerr << std::format("Failed to parse GLSL shader {}: {}", filepath.string(), program.getInfoLog());
+            const auto message = std::format("Failed to parse GLSL shader {}.\nInfo: {}\nDebug Info: {}", filepath.string(), program.getInfoLog(), program.getInfoDebugLog());
+            std::cerr << message << std::endl;
+            throw std::runtime_error(message);
         }
 
-        glslang::TIntermediate* intermediate = program.getIntermediate(language);
-        GlslShaderModule glsl_module{};
+        glslang::TIntermediate *intermediate = program.getIntermediate(language);
+        GlslShaderModule        glsl_module{};
 
-        // todo set options
         glslang::SpvOptions options{};
+        options.generateDebugInfo                = true;
+        options.emitNonSemanticShaderDebugInfo   = true;
+        options.emitNonSemanticShaderDebugSource = true;
+
         glslang::GlslangToSpv(*intermediate, glsl_module.Binary, &options);
 
         vk::ShaderModuleCreateInfo shader_module_ci{};
-        shader_module_ci.codeSize = glsl_module.Binary.size();
+        shader_module_ci.codeSize = glsl_module.Binary.size() * sizeof(uint32_t);
         shader_module_ci.pCode    = glsl_module.Binary.data();
 
         glsl_module.Module = m_device_context.Device.createShaderModule(shader_module_ci, nullptr);
 
-        const std::string          &filename = filepath.filename().string();
+        const std::string &filename = filepath.filename().string();
         check(glsl_module.Module != VK_NULL_HANDLE, "Failed to create shader module for shader " + filename);
         m_glsl_shader_modules.emplace(filename, std::move(glsl_module));
     }

@@ -5,9 +5,9 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-
 #include <slang/slang.h>
 #include "slang/slang-com-ptr.h"
+#include <glslang/Public/ResourceLimits.h>
 
 #include <vulkan/vulkan.hpp>
 
@@ -43,7 +43,7 @@ namespace vkdemo {
         const std::vector<std::string> kShaderFilenames{"particle-compute.slang", "particle-draw.slang", "postprocess.slang", "particle-compute.comp",
                                                         "particle-draw.vert",     "particle-draw.frag",  "postprocess.vert",  "postprocess.frag"};
 
-        void        load_glsl(const std::filesystem::path &filepath);
+        void        load_glsl(const std::filesystem::path &filepath, const TBuiltInResource* built_in_resources);
         void        load_slang(const std::filesystem::path &filepath);
         static void print_diagnostics(const Slang::ComPtr<slang::IBlob> &blob, std::string_view shader_name);
 

@@ -115,8 +115,8 @@ namespace vkdemo {
         GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("particle-draw.vert");
         GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("particle-draw.frag");
 
-        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, "main"},
-                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, "main"}};
+        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, globals::kGlslEntryFunctionName.data()},
+                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, globals::kGlslEntryFunctionName.data()}};
 
         // Particles will be rendered as points, their point size is defined in the shader
         vk::PipelineInputAssemblyStateCreateInfo input_assembly_state{{}, vk::PrimitiveTopology::ePointList, false};
@@ -195,8 +195,8 @@ namespace vkdemo {
         GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("postprocess.vert");
         GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("postprocess.frag");
 
-        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, globals::kVertexEntryFunctionName.data()},
-                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, globals::kFragmentEntryFunctionName.data()}};
+        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, globals::kGlslEntryFunctionName.data()},
+                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, globals::kGlslEntryFunctionName.data()}};
 
         vk::PipelineInputAssemblyStateCreateInfo input_assembly_state{{}, vk::PrimitiveTopology::eTriangleList, false};
         vk::PipelineViewportStateCreateInfo      viewport_state{{}, 1, {}, 1, {}};
