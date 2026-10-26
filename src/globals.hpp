@@ -7,6 +7,7 @@
 #include <vulkan/vulkan.hpp>
 
 /// @brief Contains constant values used throughout the application. Useful as a sort of "application" settings agglomeration.
+/// @note The renderer uses a left handed coordinate system with +X = Right, +Y = Up and +Z = Forward
 namespace vkdemo::globals {
     static constexpr std::string_view kApplicationName = "Vulkan Demo";
     static constexpr vk::Extent2D     kRenderExtent2D{1920, 1080};

@@ -19,16 +19,16 @@ namespace vkdemo {
         Camera &operator=(const Camera &)  = delete;
         Camera &operator=(const Camera &&) = delete;
 
-        void Update(FrameContext *frame_context);
+        [[nodiscard]] glm::vec3 GetEulerRotation();
+        [[nodiscard]] glm::vec3 GetLookAt();
+        [[nodiscard]] glm::vec3 GetTranslation();
 
-        glm::vec3 Rotation{};
-        glm::vec3 Position{};
-        glm::vec3 LookAtPosition{};
+        void SetEulerRotation(const glm::vec3 &rotation);
+        void SetLookAt(const glm::vec3 &look_at);
+        void SetPerspective(const float fovy, const float near, const float far);
+        void SetTranslation(const glm::vec3 &translation);
 
-        float FovY       = 60.0f;
-        float Near       = 0.1f;
-        float Far        = 1000.f;
-        float OrbitSpeed = 0.0f;
+        void Update(const FrameContext *frame_context);
 
         struct UniformData {
             glm::mat4 PerspectiveMatrix{};
@@ -37,6 +37,16 @@ namespace vkdemo {
         } UniformBufferData{};
 
         Buffered<std::unique_ptr<Buffer>> UniformBuffers{};
+
+    private:
+        const Type m_type; // This could just as easily be done using polymorphism later on
+        glm::vec3  m_rotation{};
+        glm::vec3  m_translation{0, 0, -5};
+        glm::vec3  m_look_at{};
+
+        float m_fovy = 60.0f; // Vertical field of view, in degrees.
+        float m_near = 0.1f;
+        float m_far  = 1000.f;
     };
 
 } // namespace vkdemo

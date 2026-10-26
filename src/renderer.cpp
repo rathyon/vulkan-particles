@@ -25,15 +25,26 @@ namespace vkdemo {
     }
 
     void Renderer::RenderLoop() {
-        uint64_t last_time{SDL_GetTicks()};
+        uint64_t last_time = SDL_GetTicks();
+        uint64_t current_time = last_time;
+
         bool     stop = false;
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
-            last_time       = SDL_GetTicks();
 
             // Update world buffer
-            m_world_data.DeltaTime = static_cast<float>(SDL_GetTicks() - last_time) / 1000.0f;
+            current_time = SDL_GetTicks();
+            m_world_data.Time = static_cast<float>(current_time) / 1000.0f;
+            m_world_data.TimeDelta = static_cast<float>(current_time - last_time) / 1000.0f;
+            last_time = current_time;
+
             memcpy(m_world_uniform_buffers[m_frame_context->Index]->AllocationInfo.pMappedData, &m_world_data, sizeof(World));
+
+            // temporary camera orbit
+            static constexpr float kOrbitRadius = 3.0f;
+            static constexpr float kOrbitSpeed  = 0.5f;
+
+            m_camera->SetTranslation({glm::sin(m_world_data.Time * kOrbitSpeed) * kOrbitRadius, 2.5f, glm::cos(m_world_data.Time * kOrbitSpeed) * kOrbitRadius});
             m_camera->Update(m_frame_context);
 
             m_context->BeginComputeCommands();
@@ -86,7 +97,7 @@ namespace vkdemo {
         m_compute_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_compute_pass->PipelineLayout != nullptr);
 
-        GlslShaderModule                     *shader_module = m_shader_registry->GetGlslModule("particle-compute.comp");
+        GlslShaderModule                 *shader_module = m_shader_registry->GetGlslModule("particle-compute.comp");
         vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, shader_module->Module, "main"};
 
         vk::ComputePipelineCreateInfo pipeline_ci{};
@@ -260,27 +271,38 @@ namespace vkdemo {
         std::normal_distribution<float>       normal_distribution(0, 0.5f);
 
         std::stringstream log_string{};
-        uint32_t idx = 0;
+        uint32_t          idx = 0;
 
         static constexpr bool kLogParticleStartingConditions = false;
 
         for (auto &particle: m_starting_particle_states) {
             particle.Position.x = uniform_distribution(rng_engine);
-            particle.Position.y = uniform_distribution(rng_engine);
+            particle.Position.z = uniform_distribution(rng_engine);
 
-            // particle.Velocity = glm::vec4{0, 0, 0, 0};
-            particle.Velocity.x = uniform_distribution(rng_engine);
-            particle.Velocity.y = uniform_distribution(rng_engine);
+            // Their height range is inversely proportional to how close to the world center they are
+            // The maximum height will be 2
+            float world_center_distance = glm::length(glm::vec2{particle.Position.x, particle.Position.z});
+            std::uniform_real_distribution<float> height_distribution(0, std::lerp(2.f, 0.f, world_center_distance / sqrt(2.0f)));
+            particle.Position.y = height_distribution(rng_engine);
 
-            // For now let's color the particles by starting position...
-            particle.Color = glm::vec4{(particle.Position.x + 1.0f) / 2.0f, (particle.Position.y + 1.0f) / 2.0f, 0.5f, 1};
+            particle.Velocity = glm::vec4{0, 0, 0, 0};
+
+            // For now let's color the particles by their starting position
+            particle.Color = glm::vec4{(particle.Position + 1.0f) / 2.0f};
+            particle.Color.a = 1.0f;
 
             if constexpr (kLogParticleStartingConditions)
-                log_string << "Particle " << idx++ << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << "\n";
+                log_string << "Particle " << idx << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << "\n";
+
+            ++idx;
         }
 
         if constexpr (kLogParticleStartingConditions)
             std::cout << log_string.str() << std::endl;
+
+        // world state
+        m_camera->SetTranslation({0, 5, -5});
+        m_camera->SetLookAt({0, 0, 0});
     }
 
     void Renderer::create_descriptor_pool() {

@@ -46,7 +46,8 @@ namespace vkdemo {
         };
 
         struct World {
-            float    DeltaTime{}; // in seconds
+            float    Time{};      // in seconds
+            float    TimeDelta{}; // in seconds
             uint32_t ParticleCount{globals::kParticleCount};
         };
 
