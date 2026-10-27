@@ -28,8 +28,13 @@ namespace vkdemo::globals {
     static constexpr glm::vec3        kUpAxis{0, 1, 0};
     static constexpr float            kAspectRatio = 1920.0f / 1080.0f;
 
-    static constexpr uint32_t kParticleCount = 1 << 16;
+    static constexpr uint32_t kParticleCount = 1 << 12;
     static constexpr uint32_t kRNGSeed       = 7; // Lucky seven :)
+
+    static constexpr float kMinOrbitRadius = 2.4f;
+    static constexpr float kMaxOrbitRadius = 2.5f;
+    static constexpr float kMinAngularSpeed = 0.2f;
+    static constexpr float kMaxAngularSpeed = 6.0f;
 
 } // namespace vkdemo::globals
 

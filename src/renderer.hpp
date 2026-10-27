@@ -39,10 +39,12 @@ namespace vkdemo {
         void RenderLoop();
 
     private:
-        struct Particle {
+        struct DebrisParticle {
             glm::vec4 Position{};
-            glm::vec4 Velocity{};
             glm::vec4 Color{};
+            float     Radius{};
+            float     Theta{};
+            float     AngularVelocity{};
         };
 
         struct World {
@@ -87,9 +89,9 @@ namespace vkdemo {
         Buffered<std::unique_ptr<Buffer>> m_particle_storage_buffers{};
         Buffered<std::unique_ptr<Buffer>> m_world_uniform_buffers{};
 
-        std::vector<Particle>   m_starting_particle_states{globals::kParticleCount};
-        World                   m_world_data{};
-        std::unique_ptr<Camera> m_camera{};
+        std::vector<DebrisParticle> m_starting_particle_states{globals::kParticleCount};
+        World                       m_world_data{};
+        std::unique_ptr<Camera>     m_camera{};
     };
 } // namespace vkdemo
 

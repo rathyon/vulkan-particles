@@ -1,10 +1,14 @@
 #version 450
 
+#extension GL_EXT_scalar_block_layout: enable
+
 struct Particle
 {
     vec4 Position;
-    vec4 Velocity;
-    vec4 Color;
+    vec4 Color; // constant
+    float Radius; // constant
+    float Theta;
+    float AngularVelocity; // constant
 };
 
 struct WorldData {
@@ -12,35 +16,39 @@ struct WorldData {
     uint ParticleCount;
 };
 
-layout (std430, binding = 0) readonly buffer ParticlesSSBOIn {
+layout (scalar, binding = 0) readonly buffer ParticlesSSBOIn {
     Particle ParticlesIn[];
 };
 
-layout (std430, binding = 1) buffer ParticlesSSBOOut {
+layout (scalar, binding = 1) buffer ParticlesSSBOOut {
     Particle ParticlesOut[];
 };
 
-layout (std140, binding = 2) uniform WorldDataBlock {
+layout (scalar, binding = 2) uniform WorldDataBlock {
+    float Time;
     float DeltaTime;
     uint ParticleCount;
 } WorldDataUBO;
 
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 void main() {
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 
     // Don't try to write beyond particle count
-    if(index >= (WorldDataUBO.ParticleCount)) {
+    if (index >= (WorldDataUBO.ParticleCount)) {
         return;
     }
 
+    float delta_theta = ParticlesIn[index].AngularVelocity * WorldDataUBO.DeltaTime;
+    float new_theta = ParticlesIn[index].Theta + delta_theta;
+
+    ParticlesOut[index].Theta = new_theta;
+
     // Update position
-    ParticlesOut[index].Position.xy = ParticlesIn[index].Position.xy + ParticlesIn[index].Velocity.xy;
+    ParticlesOut[index].Position.xyz = vec3(cos(new_theta) * ParticlesIn[index].Radius, ParticlesIn[index].Position.y, sin(new_theta) * ParticlesIn[index].Radius);
 
-    // Reflect velocity if hits boundary
-    if(abs(ParticlesOut[index].Position.x) > 1 || abs(ParticlesOut[index].Position.y) > 1)
-            ParticlesOut[index].Velocity = -ParticlesIn[index].Velocity;
-
-    // ParticlesOut[index] = ParticlesIn[index];
+    ParticlesOut[index].Color = ParticlesIn[index].Color;
+    ParticlesOut[index].Radius = ParticlesIn[index].Radius;
+    ParticlesOut[index].AngularVelocity = ParticlesIn[index].AngularVelocity;
 }

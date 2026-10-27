@@ -25,18 +25,18 @@ namespace vkdemo {
     }
 
     void Renderer::RenderLoop() {
-        uint64_t last_time = SDL_GetTicks();
+        uint64_t last_time    = SDL_GetTicks();
         uint64_t current_time = last_time;
 
-        bool     stop = false;
+        bool stop = false;
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
 
             // Update world buffer
-            current_time = SDL_GetTicks();
-            m_world_data.Time = static_cast<float>(current_time) / 1000.0f;
+            current_time           = SDL_GetTicks();
+            m_world_data.Time      = static_cast<float>(current_time) / 1000.0f;
             m_world_data.TimeDelta = static_cast<float>(current_time - last_time) / 1000.0f;
-            last_time = current_time;
+            last_time              = current_time;
 
             memcpy(m_world_uniform_buffers[m_frame_context->Index]->AllocationInfo.pMappedData, &m_world_data, sizeof(World));
 
@@ -44,7 +44,7 @@ namespace vkdemo {
             static constexpr float kOrbitRadius = 3.0f;
             static constexpr float kOrbitSpeed  = 0.5f;
 
-            m_camera->SetTranslation({glm::sin(m_world_data.Time * kOrbitSpeed) * kOrbitRadius, 2.5f, glm::cos(m_world_data.Time * kOrbitSpeed) * kOrbitRadius});
+            // m_camera->SetTranslation({glm::sin(m_world_data.Time * kOrbitSpeed) * kOrbitRadius, 2.5f, glm::cos(m_world_data.Time * kOrbitSpeed) * kOrbitRadius});
             m_camera->Update(m_frame_context);
 
             m_context->BeginComputeCommands();
@@ -152,15 +152,15 @@ namespace vkdemo {
         std::vector                             dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
         vk::PipelineDynamicStateCreateInfo      dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
 
-        std::vector input_bindings = {vk::VertexInputBindingDescription{0, sizeof(Particle), vk::VertexInputRate::eVertex}};
+        std::vector input_bindings = {vk::VertexInputBindingDescription{0, sizeof(DebrisParticle), vk::VertexInputRate::eVertex}};
 
         std::vector<vk::VertexInputAttributeDescription> input_attributes = {
                 // Location 0 : Position
-                {0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, Position)},
+                {0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(DebrisParticle, Position)},
                 // Location 1 : Velocity
-                {1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, Velocity)},
+                {1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(DebrisParticle, AngularVelocity)},
                 // Location 2 : Color
-                {2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, Color)},
+                {2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(DebrisParticle, Color)},
         };
 
         vk::PipelineVertexInputStateCreateInfo vertex_input_ci{{}, input_bindings, input_attributes};
@@ -268,40 +268,58 @@ namespace vkdemo {
 
         // Define initial particle states using random number generators and distributions
         std::uniform_real_distribution<float> uniform_distribution(-1.0f, 1.0f);
-        std::normal_distribution<float>       normal_distribution(0, 0.5f);
+        std::normal_distribution<float>       normal_distribution(0, 3.0f);
 
         std::stringstream log_string{};
-        uint32_t          idx = 0;
+        uint32_t          particle_idx = 0;
 
-        static constexpr bool kLogParticleStartingConditions = false;
+        static constexpr bool  kLogParticleStartingConditions = false;
+        static constexpr float kSliceRadius                   = globals::kMaxOrbitRadius - globals::kMinOrbitRadius;
 
+        std::uniform_real_distribution<float> orbit_distribution(globals::kMinOrbitRadius, globals::kMaxOrbitRadius);
+        std::uniform_real_distribution<float> angle_distribution(0.0f, 360.0f);
+        std::uniform_real_distribution<float> orbit_angular_velocity_distribution(globals::kMinAngularSpeed, globals::kMaxAngularSpeed); // angles per second
+
+        // The particles will be distributed along a torus, emulating a debris field that could be orbiting a planet, for example.
         for (auto &particle: m_starting_particle_states) {
-            particle.Position.x = uniform_distribution(rng_engine);
-            particle.Position.z = uniform_distribution(rng_engine);
+            // Define starting position in the X-Z plane. This can be described with the distance from the center of rotation, plus an angle (here named theta).
+            particle.Radius     = orbit_distribution(rng_engine);
+            particle.Theta      = glm::radians(angle_distribution(rng_engine));
+            particle.Position.x = glm::cos(particle.Theta) * particle.Radius;
+            particle.Position.z = glm::sin(particle.Theta) * particle.Radius;
+            particle.Position.w = 1.0;
 
-            // Their height range is inversely proportional to how close to the world center they are
-            // The maximum height will be 2
-            float world_center_distance = glm::length(glm::vec2{particle.Position.x, particle.Position.z});
-            std::uniform_real_distribution<float> height_distribution(0, std::lerp(2.f, 0.f, world_center_distance / sqrt(2.0f)));
+            // Define starting position in the Y axis. Given that X and Z are known, this restricts the value range in the Y axis to satisfy the condition that the Y coordinate remains inside a circle
+            // (A circle is the torus' slice shape)
+            // todo explain this math later...no time to explain for now
+            const float radius_ratio = (particle.Radius - globals::kMinOrbitRadius) / kSliceRadius; // calc range [0,1] relative to min and max radius
+            const float cos_phi      = (radius_ratio * 2.0f) - 1.0f;                                         // change range to [-1,1]
+            const float phi          = glm::acos(cos_phi);
+
+            // The height can now range from 0 to sin(phi)
+            const float                           height = std::abs(glm::sin(phi)) * kSliceRadius;
+            std::uniform_real_distribution<float> height_distribution(-height, height);
             particle.Position.y = height_distribution(rng_engine);
 
-            particle.Velocity = glm::vec4{0, 0, 0, 0};
+            particle.AngularVelocity = glm::radians(orbit_angular_velocity_distribution(rng_engine));
 
-            // For now let's color the particles by their starting position
-            particle.Color = glm::vec4{(particle.Position + 1.0f) / 2.0f};
-            particle.Color.a = 1.0f;
+            // Color by starting theta
+            const float revolution_percentage = particle.Theta / glm::two_pi<float>();
+            particle.Color = glm::vec4(revolution_percentage, 1.0, 1.0 - revolution_percentage, 1.0);
 
             if constexpr (kLogParticleStartingConditions)
-                log_string << "Particle " << idx << ": " << glm::to_string(particle.Position) << " | " << glm::to_string(particle.Velocity) << " | " << glm::to_string(particle.Color) << "\n";
+                log_string << "Particle " << particle_idx << ":\n"
+                           << "Position: " << glm::to_string(particle.Position) << " | AngularVelocity :" << std::to_string(particle.AngularVelocity) << " | Color: " << glm::to_string(particle.Color)
+                           << "\n";
 
-            ++idx;
+            ++particle_idx;
         }
 
         if constexpr (kLogParticleStartingConditions)
             std::cout << log_string.str() << std::endl;
 
         // world state
-        m_camera->SetTranslation({0, 5, -5});
+        m_camera->SetTranslation({3, 1, -3});
         m_camera->SetLookAt({0, 0, 0});
     }
 
@@ -324,7 +342,7 @@ namespace vkdemo {
     }
 
     void Renderer::create_buffers() {
-        static constexpr uint64_t kBufferSize = sizeof(Particle) * globals::kParticleCount;
+        static constexpr uint64_t kBufferSize = sizeof(DebrisParticle) * globals::kParticleCount;
 
         // Create particle storage buffers
         // upload to staging buffer and then copy from staging onto device buffer
