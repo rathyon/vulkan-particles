@@ -19,6 +19,7 @@ namespace vkdemo {
 
         VmaAllocation            Allocation{nullptr};
         VmaAllocationInfo        AllocationInfo{};
+        vk::DeviceAddress        DeviceAddress{};
         vk::DescriptorBufferInfo Descriptor{};
         const uint64_t           Size;
 

@@ -1,6 +1,7 @@
 #version 450
 
 #extension GL_EXT_scalar_block_layout: enable
+#extension GL_EXT_buffer_reference : require
 
 struct Particle
 {
@@ -11,11 +12,6 @@ struct Particle
     float AngularVelocity; // constant
 };
 
-struct WorldData {
-    float DeltaTime;
-    uint ParticleCount;
-};
-
 layout (scalar, binding = 0) readonly buffer ParticlesSSBOIn {
     Particle ParticlesIn[];
 };
@@ -24,23 +20,36 @@ layout (scalar, binding = 1) buffer ParticlesSSBOOut {
     Particle ParticlesOut[];
 };
 
-layout (scalar, binding = 2) uniform WorldDataBlock {
+struct WorldData
+{
     float Time;
     float DeltaTime;
     uint ParticleCount;
-} WorldDataUBO;
+};
+
+layout (buffer_reference, std430, buffer_reference_align = 4) buffer WorldDataUBORef
+{
+    WorldData WorldDataUBO;
+};
+
+layout (push_constant) uniform PushConstants
+{
+    WorldDataUBORef WorldDataRef;
+} PushConstant;
 
 layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 void main() {
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 
+    const WorldData world_data = PushConstant.WorldDataRef.WorldDataUBO;
+
     // Don't try to write beyond particle count
-    if (index >= (WorldDataUBO.ParticleCount)) {
+    if (index >= (world_data.ParticleCount)) {
         return;
     }
 
-    float delta_theta = ParticlesIn[index].AngularVelocity * WorldDataUBO.DeltaTime;
+    float delta_theta = ParticlesIn[index].AngularVelocity * world_data.DeltaTime;
     float new_theta = ParticlesIn[index].Theta + delta_theta;
 
     ParticlesOut[index].Theta = new_theta;

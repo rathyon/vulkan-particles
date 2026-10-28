@@ -6,6 +6,7 @@
 namespace vkdemo {
     Buffer::Buffer(const DeviceContext &context, const vk::BufferUsageFlags usage_flags, const bool host_access, const uint64_t size) : Size(size), m_device_context(context) {
         vk::BufferCreateInfo create_info{{}, size, usage_flags};
+        create_info.usage |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
 
         VmaAllocationCreateInfo vma_allocation_ci{};
 
@@ -21,6 +22,7 @@ namespace vkdemo {
 
         Descriptor.offset = 0;
         Descriptor.range  = size;
+        DeviceAddress = m_device_context.Device.getBufferAddress(vk::BufferDeviceAddressInfo{Descriptor.buffer});
     }
     Buffer::~Buffer() { vmaDestroyBuffer(m_device_context.VmaAllocator, Descriptor.buffer, Allocation); }
 } // namespace vkdemo

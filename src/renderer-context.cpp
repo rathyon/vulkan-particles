@@ -27,8 +27,8 @@ namespace vkdemo {
 
         for (int i = 0; i < globals::kFramesInFlight; ++i) {
             m_device.destroySemaphore(m_image_acquired_semaphores[i]);
-            m_device.destroySemaphore(m_compute_ready_semaphores[i]);
-            m_device.destroySemaphore(m_compute_complete_semaphores[i]);
+            m_device.destroySemaphore(m_particle_compute_ready_semaphores[i]);
+            m_device.destroySemaphore(m_particle_compute_complete_semaphores[i]);
             m_device.destroyFence(m_graphics_fences[i]);
             m_device.destroyFence(m_compute_fences[i]);
         }
@@ -76,7 +76,7 @@ namespace vkdemo {
     }
 
     vk::CommandBuffer RendererContext::CreateCommandBuffer(const bool begin_recording, const QueueType queue) {
-        assert(queue != QueueType::Present  && "Cannot use Present queue for commands!");
+        assert(queue != QueueType::Present && "Cannot use Present queue for commands!");
         vk::CommandBufferAllocateInfo command_buffer_ai{};
         command_buffer_ai.commandPool        = m_command_pools[queue];
         command_buffer_ai.commandBufferCount = 1;
@@ -103,10 +103,10 @@ namespace vkdemo {
         cb.end();
 
         // Submit command buffer to graphics queue
-        // Wait for final write into color attachment and for compute to finish
+        // Wait for final write into color attachment and for particle compute to finish
         std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eVertexInput};
-        std::vector                         wait_semaphores{m_image_acquired_semaphores[m_frame_index], m_compute_complete_semaphores[m_frame_index]};
-        std::vector                         signal_semaphores{m_swapchain->RenderCompleteSemaphores[m_swapchain_image_index], m_compute_ready_semaphores[m_frame_index]};
+        std::vector                         wait_semaphores{m_image_acquired_semaphores[m_frame_index], m_particle_compute_complete_semaphores[m_frame_index]};
+        std::vector                         signal_semaphores{m_swapchain->RenderCompleteSemaphores[m_swapchain_image_index], m_particle_compute_ready_semaphores[m_frame_index]};
 
         vk::SubmitInfo submit_info{};
         submit_info.setWaitSemaphores(wait_semaphores);
@@ -134,13 +134,16 @@ namespace vkdemo {
 
         std::vector<vk::PipelineStageFlags> wait_stage_mask = {vk::PipelineStageFlagBits::eComputeShader};
 
-        // This compute frame needs the previous compute frame to complete (need previous particle data)
-        vk::SubmitInfo                      submit_info{{m_compute_ready_semaphores[prev_frame_index]}, wait_stage_mask, {cb}, {m_compute_complete_semaphores[m_frame_index]}};
+        // This particle compute frame needs the previous particle compute frame to complete (need previous frame data)
+        std::vector wait_semaphores{m_particle_compute_ready_semaphores[prev_frame_index]};
+        std::vector signal_semaphores{m_particle_compute_complete_semaphores[m_frame_index]};
+
+        vk::SubmitInfo submit_info{wait_semaphores, wait_stage_mask, {cb}, signal_semaphores};
         m_device_context.Queues[Compute].submit({submit_info}, m_compute_fences[m_frame_index]);
     }
 
     void RendererContext::FlushCommandBuffer(const vk::CommandBuffer cb, const QueueType queue) const {
-        assert(queue != QueueType::Present  && "Cannot use Present queue for commands!");
+        assert(queue != QueueType::Present && "Cannot use Present queue for commands!");
 
         if (cb == nullptr)
             return;
@@ -197,18 +200,18 @@ namespace vkdemo {
             m_graphics_fences[i]             = m_device.createFence(fence_create_info);
             m_compute_fences[i]              = m_device.createFence(fence_create_info);
             m_image_acquired_semaphores[i]   = m_device.createSemaphore(semaphore_create_info);
-            m_compute_ready_semaphores[i]    = m_device.createSemaphore(semaphore_create_info);
-            m_compute_complete_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
+            m_particle_compute_ready_semaphores[i]    = m_device.createSemaphore(semaphore_create_info);
+            m_particle_compute_complete_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
 
             check(m_graphics_fences[i] != nullptr, "Failed to create fence");
             check(m_compute_fences[i] != nullptr, "Failed to create fence");
             check(m_image_acquired_semaphores[i] != nullptr, "Failed to create semaphore");
-            check(m_compute_ready_semaphores[i] != nullptr, "Failed to create semaphore");
-            check(m_compute_complete_semaphores[i] != nullptr, "Failed to create semaphore");
+            check(m_particle_compute_ready_semaphores[i] != nullptr, "Failed to create semaphore");
+            check(m_particle_compute_complete_semaphores[i] != nullptr, "Failed to create semaphore");
         }
 
         // The first used compute ready semaphore must start signaled. First call into EndComputeCommands requires this to not block.
-        vk::SubmitInfo submit_info{{}, {}, {}, {m_compute_ready_semaphores[1]}};
+        vk::SubmitInfo submit_info{{}, {}, {}, {m_particle_compute_ready_semaphores[1]}};
         m_device_context.Queues[Compute].submit({submit_info}, nullptr);
     }
 

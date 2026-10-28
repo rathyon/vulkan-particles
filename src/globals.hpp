@@ -16,7 +16,7 @@ namespace vkdemo::globals {
     static constexpr bool             kEnableVulkanLayers = true;
     static constexpr bool             kPrintDeviceCapabilities{true};
     static constexpr bool             kPrintDeviceMemoryProperties{true};
-    static constexpr bool             kVSyncEnabled{false};
+    static constexpr bool             kVSyncEnabled{true};
     static constexpr uint32_t         kFramesInFlight{2};
     static constexpr vk::Format       kColorAttachmentFormat          = vk::Format::eR8G8B8A8Unorm;
     static constexpr vk::Format       kDepthStencilAttachmentFormat   = vk::Format::eD32SfloatS8Uint;

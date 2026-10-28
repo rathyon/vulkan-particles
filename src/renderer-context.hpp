@@ -59,8 +59,8 @@ namespace vkdemo {
         Buffered<vk::Semaphore> m_image_acquired_semaphores{};
 
         Buffered<vk::Fence>     m_compute_fences{};
-        Buffered<vk::Semaphore> m_compute_ready_semaphores{};
-        Buffered<vk::Semaphore> m_compute_complete_semaphores{};
+        Buffered<vk::Semaphore> m_particle_compute_ready_semaphores{};
+        Buffered<vk::Semaphore> m_particle_compute_complete_semaphores{};
 
         // vk::CommandPool             m_graphics_command_pool{};
         Buffered<vk::CommandBuffer> m_graphics_command_buffers{};

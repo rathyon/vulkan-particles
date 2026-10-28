@@ -24,6 +24,10 @@ namespace vkdemo {
         return SDL_Vulkan_CreateSurface(m_sdl_window, instance, nullptr, reinterpret_cast<VkSurfaceKHR*>(&surface));
     }
 
+    void Window::SetTitle(const std::string &title) const {
+        SDL_SetWindowTitle(m_sdl_window, title.c_str());
+    }
+
     glm::ivec2 Window::Size() const noexcept {
         return m_size;
     }

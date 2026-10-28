@@ -1,5 +1,7 @@
 #include "renderer.hpp"
 
+#include "window.hpp"
+
 #include <SDL3/SDL.h>
 #include <random>
 
@@ -9,6 +11,7 @@ namespace vkdemo {
 
     void Renderer::Initialize(const Window &window) {
         m_device_context.Initialize();
+        m_window = &window;
 
         m_context         = std::make_unique<RendererContext>(m_device_context);
         m_shader_registry = std::make_unique<ShaderRegistry>(m_device_context);
@@ -37,6 +40,8 @@ namespace vkdemo {
             m_world_data.Time      = static_cast<float>(current_time) / 1000.0f;
             m_world_data.TimeDelta = static_cast<float>(current_time - last_time) / 1000.0f;
             last_time              = current_time;
+
+            m_window->SetTitle("FPS: " + std::to_string(1.0f / m_world_data.TimeDelta));
 
             memcpy(m_world_uniform_buffers[m_frame_context->Index]->AllocationInfo.pMappedData, &m_world_data, sizeof(World));
 
@@ -84,15 +89,19 @@ namespace vkdemo {
         std::vector<vk::DescriptorSetLayoutBinding> set_layout_bindings{// Binding 0: previous frame particle buffer
                                                                         {0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
                                                                         // Binding 1: current frame particle buffer
-                                                                        {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-                                                                        // Binding 2: world uniform buffer
-                                                                        {2, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute}};
+                                                                        {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
         m_compute_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
 
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
         pipeline_layout_ci.setSetLayouts(m_compute_pass->DescriptorSetLayout);
+
+        // A pointer to the world data buffer is passed
+        vk::PushConstantRange push_constant_range{};
+        push_constant_range.size       = sizeof(vk::DeviceAddress);
+        push_constant_range.stageFlags = vk::ShaderStageFlagBits::eCompute;
+        pipeline_layout_ci.setPushConstantRanges(push_constant_range);
 
         m_compute_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_compute_pass->PipelineLayout != nullptr);
@@ -201,10 +210,8 @@ namespace vkdemo {
         m_postprocess_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_postprocess_pass->PipelineLayout != nullptr);
 
-        // The postprocess shader uses a technique described by Sascha Willems:
-        // https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
-        GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("postprocess.vert");
-        GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("postprocess.frag");
+        GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("dual-kawase-blur-down.comp");
+        GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("dual-kawase-blur-up.comp");
 
         std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, globals::kGlslEntryFunctionName.data()},
                                   vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, globals::kGlslEntryFunctionName.data()}};
@@ -293,7 +300,7 @@ namespace vkdemo {
             // (A circle is the torus' slice shape)
             // todo explain this math later...no time to explain for now
             const float radius_ratio = (particle.Radius - globals::kMinOrbitRadius) / kSliceRadius; // calc range [0,1] relative to min and max radius
-            const float cos_phi      = (radius_ratio * 2.0f) - 1.0f;                                         // change range to [-1,1]
+            const float cos_phi      = (radius_ratio * 2.0f) - 1.0f;                                // change range to [-1,1]
             const float phi          = glm::acos(cos_phi);
 
             // The height can now range from 0 to sin(phi)
@@ -305,7 +312,7 @@ namespace vkdemo {
 
             // Color by starting theta
             const float revolution_percentage = particle.Theta / glm::two_pi<float>();
-            particle.Color = glm::vec4(revolution_percentage, 1.0, 1.0 - revolution_percentage, 1.0);
+            particle.Color                    = glm::vec4(revolution_percentage, 1.0, 1.0 - revolution_percentage, 1.0);
 
             if constexpr (kLogParticleStartingConditions)
                 log_string << "Particle " << particle_idx << ":\n"
@@ -403,9 +410,7 @@ namespace vkdemo {
             std::vector write_descriptor_sets = {// Binding 0: previous frame particle buffer
                                                  vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eStorageBuffer, nullptr, m_particle_storage_buffers[prev_frame]->Descriptor},
                                                  // Binding 1: current frame particle buffer
-                                                 vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eStorageBuffer, nullptr, m_particle_storage_buffers[frame_index]->Descriptor},
-                                                 // Binding 2: world uniform buffer
-                                                 vk::WriteDescriptorSet{descriptor_set, 2, 0, vk::DescriptorType::eUniformBuffer, nullptr, m_world_uniform_buffers[frame_index]->Descriptor}};
+                                                 vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eStorageBuffer, nullptr, m_particle_storage_buffers[frame_index]->Descriptor}};
 
             m_device_context.Device.updateDescriptorSets(write_descriptor_sets, {});
         }
@@ -466,6 +471,7 @@ namespace vkdemo {
 
         cb.bindPipeline(vk::PipelineBindPoint::eCompute, m_compute_pass->Pipeline);
         cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_compute_pass->PipelineLayout, 0, {m_compute_pass->DescriptorSets[0][m_frame_context->Index]}, {});
+        cb.pushConstants(m_compute_pass->PipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(vk::DeviceAddress), &m_world_uniform_buffers[m_frame_context->Index]->DeviceAddress);
         cb.dispatch(globals::kParticleCount / 256, 1, 1);
 
         // Add barrier to ensure that compute shader has finished writing to the buffer

@@ -233,9 +233,14 @@ namespace vkdemo {
             queue_create_infos.emplace_back(create_info);
         }
 
+        // Enable SPIR-V decoration for shader debug info
+        vk::PhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR relaxed_extended_instruction_features{};
+        relaxed_extended_instruction_features.shaderRelaxedExtendedInstruction = true;
+
         // Required due to lack of Slang support for writing PointSize
         vk::PhysicalDeviceMaintenance5Features maintenance5_features{};
         maintenance5_features.maintenance5 = true;
+        maintenance5_features.pNext = &relaxed_extended_instruction_features;
 
         // Enable desired vulkan features
         vk::PhysicalDeviceHostImageCopyFeatures host_image_copy_features{};

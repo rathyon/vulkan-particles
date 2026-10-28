@@ -74,6 +74,7 @@ namespace vkdemo {
         void postprocess_pass();
 
         DeviceContext                    m_device_context{};
+        const Window                    *m_window;
         std::unique_ptr<RendererContext> m_context;
         std::unique_ptr<ShaderRegistry>  m_shader_registry;
 

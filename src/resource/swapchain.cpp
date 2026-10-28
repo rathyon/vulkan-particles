@@ -25,7 +25,8 @@ namespace vkdemo {
         swapchain_create_info.clipped = true;
 
         if constexpr (globals::kVSyncEnabled) {
-            swapchain_create_info.presentMode = vk::PresentModeKHR::eMailbox; // V-SYNC, no screen tearing
+            // swapchain_create_info.presentMode = vk::PresentModeKHR::eMailbox; // V-SYNC, no screen tearing, "uncapped framerate"
+            swapchain_create_info.presentMode = vk::PresentModeKHR::eFifo; // V-SYNC, no screen tearing
         } else {
             swapchain_create_info.presentMode = vk::PresentModeKHR::eImmediate; // Uncapped framerate, screen tearing
         }

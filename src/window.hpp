@@ -19,6 +19,10 @@ namespace vkdemo {
         /// @return True if the surface was created, false otherwise.
         [[nodiscard]] bool CreateSurface(const vk::Instance &instance, vk::SurfaceKHR &surface) const;
 
+        /// @brief Sets the title of the window.
+        /// @param title The title to set.
+        void SetTitle(const std::string &title) const;
+
         /// @brief Returns the client size of the window, in pixels.
         /// @return The client size, in pixels.
         [[nodiscard]] glm::ivec2 Size() const noexcept;
