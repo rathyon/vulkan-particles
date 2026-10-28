@@ -87,7 +87,7 @@ namespace vkdemo {
         create_compute_pass();
         create_particle_draw_pass();
         create_blur_passes();
-        update_descriptor_sets();
+        create_descriptor_sets();
     }
 
     void Renderer::create_compute_pass() {
@@ -99,10 +99,10 @@ namespace vkdemo {
                                                                         {1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
-        m_compute_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        m_compute_pass->DescriptorSetLayouts.emplace_back(m_device_context.Device.createDescriptorSetLayout(descriptor_layout));
 
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setSetLayouts(m_compute_pass->DescriptorSetLayout);
+        pipeline_layout_ci.setSetLayouts(m_compute_pass->DescriptorSetLayouts);
 
         // A pointer to the world data buffer is passed
         vk::PushConstantRange push_constant_range{};
@@ -132,10 +132,10 @@ namespace vkdemo {
                                                                         {0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
-        m_particle_draw_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        m_particle_draw_pass->DescriptorSetLayouts.emplace_back(m_device_context.Device.createDescriptorSetLayout(descriptor_layout));
 
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setSetLayouts(m_particle_draw_pass->DescriptorSetLayout);
+        pipeline_layout_ci.setSetLayouts(m_particle_draw_pass->DescriptorSetLayouts);
         m_particle_draw_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_particle_draw_pass->PipelineLayout != nullptr);
 
@@ -203,28 +203,48 @@ namespace vkdemo {
     }
 
     void Renderer::create_blur_passes() {
+        // todo this code is messy because it was rushed, it needs a dire cleanup
+
         m_downsample_blur_pass = std::make_unique<RenderPass>(m_device_context.Device);
-        m_upsample_blur_pass = std::make_unique<RenderPass>(m_device_context.Device);
+        m_upsample_blur_pass   = std::make_unique<RenderPass>(m_device_context.Device);
 
-        std::vector set_layout_bindings{// Binding 0: source image
-                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eCompute},
-                                        // Binding 1: source image sampler
-                                        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eCompute},
-                                        // Binding 2: destination image
-                                        vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eCompute}};
+        std::vector sampler_set_layout_bindings{
+                // Binding 0: sampler
+                vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eCompute},
+        };
 
-        vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
-        m_downsample_blur_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
-        m_upsample_blur_pass->DescriptorSetLayout   = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        vk::DescriptorSetLayoutCreateInfo descriptor_layout_ci{{}, sampler_set_layout_bindings};
+        m_downsample_blur_pass->DescriptorSetLayouts.emplace_back(m_device_context.Device.createDescriptorSetLayout(descriptor_layout_ci));
+
+        std::vector source_image_set_layout_bindings{// Binding 0: source image
+                                                     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, kImageDescriptorCount, vk::ShaderStageFlagBits::eCompute}};
+
+        // Reuse previous variables
+        std::vector<vk::DescriptorBindingFlags> descriptor_binding_flags{};
+        descriptor_binding_flags.emplace_back(vk::DescriptorBindingFlagBits::eVariableDescriptorCount);
+        vk::DescriptorSetLayoutBindingFlagsCreateInfo set_layout_binding_flags{};
+        set_layout_binding_flags.setBindingFlags(descriptor_binding_flags);
+
+        descriptor_layout_ci.setBindings(source_image_set_layout_bindings);
+        descriptor_layout_ci.pNext = &set_layout_binding_flags;
+
+        m_downsample_blur_pass->DescriptorSetLayouts.emplace_back(m_device_context.Device.createDescriptorSetLayout(descriptor_layout_ci));
+
+        std::vector destination_image_layout_bindings{// Binding 0: destination image
+                                                      vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eStorageImage, kImageDescriptorCount, vk::ShaderStageFlagBits::eCompute}};
+
+        descriptor_layout_ci.setBindings(destination_image_layout_bindings);
+        m_downsample_blur_pass->DescriptorSetLayouts.emplace_back(m_device_context.Device.createDescriptorSetLayout(descriptor_layout_ci));
+
 
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setSetLayouts(m_downsample_blur_pass->DescriptorSetLayout);
+        pipeline_layout_ci.setSetLayouts(m_downsample_blur_pass->DescriptorSetLayouts);
         m_downsample_blur_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
         check(m_downsample_blur_pass->PipelineLayout != nullptr);
 
-        pipeline_layout_ci.setSetLayouts(m_upsample_blur_pass->DescriptorSetLayout);
-        m_upsample_blur_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
-        check(m_upsample_blur_pass->PipelineLayout != nullptr);
+        // Same thing, just copy
+        m_upsample_blur_pass->DescriptorSetLayouts = m_downsample_blur_pass->DescriptorSetLayouts;
+        m_upsample_blur_pass->PipelineLayout = m_downsample_blur_pass->PipelineLayout;
 
         GlslShaderModule                 *downsample_module = m_shader_registry->GetGlslModule("dual-kawase-blur-down.comp");
         vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, downsample_module->Module, globals::kGlslEntryFunctionName.data()};
@@ -246,9 +266,9 @@ namespace vkdemo {
     }
 
     void Renderer::prepare_resources() {
-        create_descriptor_pool();
         create_buffers();
         create_images();
+        create_descriptor_pool();
     }
 
     void Renderer::prepare_starting_conditions() {
@@ -317,9 +337,9 @@ namespace vkdemo {
                                                           // World data uniform buffer + Camera uniform buffer
                                                           {vk::DescriptorType::eUniformBuffer, 2 * globals::kFramesInFlight},
                                                           // Source image for post processing
-                                                          {vk::DescriptorType::eSampledImage, (globals::kKawaseDualBlurLevelCount * 2) * globals::kFramesInFlight},
+                                                          {vk::DescriptorType::eSampledImage, kImageDescriptorCount * globals::kFramesInFlight},
                                                           // Destination image for post processing
-                                                          {vk::DescriptorType::eStorageImage, (globals::kKawaseDualBlurLevelCount * 2) * globals::kFramesInFlight},
+                                                          {vk::DescriptorType::eStorageImage, kImageDescriptorCount * globals::kFramesInFlight},
                                                           // Samplers
                                                           {vk::DescriptorType::eSampler, globals::kFramesInFlight}};
 
@@ -376,16 +396,47 @@ namespace vkdemo {
             attachment_ptr = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color);
         }
 
-        // m_post_process_effect_attachment = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color);
+        static constexpr uint8_t kLowestBlurLevel = kBlurStepAttachmentCount / 2;
+        for (int i = 0; i < kLowestBlurLevel; ++i) {
+            const uint8_t      factor                                 = 2 << i;
+            const vk::Extent3D extent                                 = vk::Extent3D{globals::kRenderExtent3D.width / factor, globals::kRenderExtent3D.height / factor, globals::kRenderExtent3D.depth};
+            m_blur_step_attachments[i]                                = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color, extent);
+            m_blur_step_attachments[kBlurStepAttachmentCount - 1 - i] = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color, extent);
+        }
+
+        assert(m_blur_step_attachments[kLowestBlurLevel] == nullptr);
+        const vk::Extent3D lowest_extent =
+                vk::Extent3D{globals::kRenderExtent3D.width / (2 << kLowestBlurLevel), globals::kRenderExtent3D.height / (2 << kLowestBlurLevel), globals::kRenderExtent3D.depth};
+        m_blur_step_attachments[kLowestBlurLevel] = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color, lowest_extent);
+
+        // Create sampler
+        vk::SamplerCreateInfo sampler_ci{};
+        sampler_ci.magFilter     = vk::Filter::eLinear;
+        sampler_ci.minFilter     = vk::Filter::eLinear;
+        sampler_ci.mipmapMode    = vk::SamplerMipmapMode::eLinear;
+        sampler_ci.addressModeU  = vk::SamplerAddressMode::eClampToBorder; // todo review this
+        sampler_ci.addressModeV  = sampler_ci.addressModeU;
+        sampler_ci.addressModeW  = sampler_ci.addressModeU;
+        sampler_ci.mipLodBias    = 0.0f;
+        sampler_ci.maxAnisotropy = 1.0f;
+        sampler_ci.compareOp     = vk::CompareOp::eNever;
+        sampler_ci.minLod        = 0.0f;
+        sampler_ci.maxLod        = 1.0f;
+        sampler_ci.borderColor   = vk::BorderColor::eFloatOpaqueBlack;
+
+        m_sampler = m_device_context.Device.createSampler(sampler_ci);
+        check(m_sampler != nullptr);
+
+        m_sampler_descriptor.sampler = m_sampler;
     }
 
-    void Renderer::update_descriptor_sets() {
-        update_particle_compute_descriptor_sets();
-        update_particle_draw_descriptor_sets();
-        update_blur_descriptor_sets();
+    void Renderer::create_descriptor_sets() {
+        create_particle_compute_descriptor_sets();
+        create_particle_draw_descriptor_sets();
+        create_blur_descriptor_sets();
     }
 
-    void Renderer::update_particle_compute_descriptor_sets() {
+    void Renderer::create_particle_compute_descriptor_sets() {
         m_compute_pass->DescriptorSets.resize(1);
 
         for (size_t frame_index = 0; frame_index < m_compute_pass->DescriptorSets[0].size(); ++frame_index) {
@@ -393,7 +444,7 @@ namespace vkdemo {
 
             const uint32_t prev_frame = (frame_index - 1 + globals::kFramesInFlight) % globals::kFramesInFlight;
 
-            vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_compute_pass->DescriptorSetLayout}};
+            vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_compute_pass->DescriptorSetLayouts[0]}};
             check(m_device_context.Device.allocateDescriptorSets(&alloc_info, &descriptor_set));
 
             std::vector write_descriptor_sets = {// Binding 0: previous frame particle buffer
@@ -405,13 +456,13 @@ namespace vkdemo {
         }
     }
 
-    void Renderer::update_particle_draw_descriptor_sets() {
+    void Renderer::create_particle_draw_descriptor_sets() {
         m_particle_draw_pass->DescriptorSets.resize(1);
 
         for (size_t frame_index = 0; frame_index < m_particle_draw_pass->DescriptorSets[0].size(); ++frame_index) {
             vk::DescriptorSet &descriptor_set = m_particle_draw_pass->DescriptorSets[0][frame_index];
 
-            vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_particle_draw_pass->DescriptorSetLayout}};
+            vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_particle_draw_pass->DescriptorSetLayouts[0]}};
             check(m_device_context.Device.allocateDescriptorSets(&alloc_info, &descriptor_set));
 
             std::vector write_descriptor_sets = {// Binding 0: camera uniform buffer
@@ -421,7 +472,7 @@ namespace vkdemo {
         }
     }
 
-    void Renderer::update_blur_descriptor_sets() {
+    void Renderer::create_blur_descriptor_sets() {
         // TODO use bindless
         // m_downsample_blur_pass->DescriptorSets.resize(1);
         //
@@ -456,6 +507,99 @@ namespace vkdemo {
         //
         //     m_device_context.Device.updateDescriptorSets(write_descriptor_sets, {});
         // }
+
+        std::vector<uint32_t> variable_desciptor_counts{kImageDescriptorCount, kImageDescriptorCount};
+
+        vk::DescriptorSetVariableDescriptorCountAllocateInfo variable_descriptor_count_ai{};
+        variable_descriptor_count_ai.setDescriptorCounts(variable_desciptor_counts);
+
+        std::vector<RenderAttachment *> blur_images{};
+        for (auto &attachment: m_main_color_attachments) {
+            blur_images.emplace_back(attachment.get());
+        }
+        for (auto &attachment: m_blur_step_attachments) {
+            blur_images.emplace_back(attachment.get());
+        }
+
+        // Sampler
+        vk::WriteDescriptorSet sampler_descriptor_write{};
+        sampler_descriptor_write.dstBinding      = 0;
+        sampler_descriptor_write.dstArrayElement = 0;
+        sampler_descriptor_write.descriptorCount = 1;
+        sampler_descriptor_write.descriptorType  = vk::DescriptorType::eSampler;
+        sampler_descriptor_write.pImageInfo      = &m_sampler_descriptor;
+
+        // Source images
+        std::vector<vk::DescriptorImageInfo> source_image_descriptors(blur_images.size());
+        for (size_t i = 0; i < source_image_descriptors.size(); ++i) {
+            source_image_descriptors[i].sampler     = m_sampler;
+            source_image_descriptors[i].imageView   = blur_images[i]->Descriptor.imageView;
+            source_image_descriptors[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+        }
+        vk::WriteDescriptorSet source_image_array_descriptor_write{};
+        source_image_array_descriptor_write.dstBinding      = 0;
+        source_image_array_descriptor_write.dstArrayElement = 0;
+        source_image_array_descriptor_write.descriptorCount = kImageDescriptorCount;
+        source_image_array_descriptor_write.descriptorType  = vk::DescriptorType::eSampledImage;
+        source_image_array_descriptor_write.pImageInfo      = source_image_descriptors.data();
+
+        // Destination images
+        std::vector<vk::DescriptorImageInfo> destination_image_descriptors(blur_images.size());
+        for (size_t i = 0; i < destination_image_descriptors.size(); ++i) {
+            destination_image_descriptors[i].sampler     = m_sampler;
+            destination_image_descriptors[i].imageView   = blur_images[i]->Descriptor.imageView;
+            destination_image_descriptors[i].imageLayout = vk::ImageLayout::eGeneral;
+        }
+
+        vk::WriteDescriptorSet destination_image_array_descriptor_write{};
+        destination_image_array_descriptor_write.dstBinding      = 0;
+        destination_image_array_descriptor_write.dstArrayElement = 0;
+        destination_image_array_descriptor_write.descriptorCount = kImageDescriptorCount;
+        destination_image_array_descriptor_write.descriptorType  = vk::DescriptorType::eStorageImage;
+        destination_image_array_descriptor_write.pImageInfo      = destination_image_descriptors.data();
+
+
+        // Allocate descriptor sets
+        m_downsample_blur_pass->DescriptorSets.resize(3);
+        m_upsample_blur_pass->DescriptorSets.resize(3);
+
+        vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool};
+        std::vector<vk::DescriptorSetLayout> set_layouts;
+
+        // Sampler set layout
+        set_layouts = {m_downsample_blur_pass->DescriptorSetLayouts[0], m_downsample_blur_pass->DescriptorSetLayouts[0]};
+        alloc_info.setSetLayouts(set_layouts);
+        check(m_device_context.Device.allocateDescriptorSets(&alloc_info, m_downsample_blur_pass->DescriptorSets[0].data()));
+
+        // Source image set layout
+        alloc_info.pNext = &variable_descriptor_count_ai;
+
+        set_layouts = {m_downsample_blur_pass->DescriptorSetLayouts[1], m_downsample_blur_pass->DescriptorSetLayouts[1]};
+        alloc_info.setSetLayouts(set_layouts);
+        check(m_device_context.Device.allocateDescriptorSets(&alloc_info, m_downsample_blur_pass->DescriptorSets[1].data()));
+
+        // Destination image set layout
+        set_layouts = {m_downsample_blur_pass->DescriptorSetLayouts[2], m_downsample_blur_pass->DescriptorSetLayouts[2]};
+        alloc_info.setSetLayouts(set_layouts);
+        check(m_device_context.Device.allocateDescriptorSets(&alloc_info, m_downsample_blur_pass->DescriptorSets[2].data()));
+
+        // Update descriptor sets
+        for (int frame = 0; frame < globals::kFramesInFlight; ++frame) {
+            auto& sampler_set = m_downsample_blur_pass->DescriptorSets[0][frame];
+            auto& src_image_set = m_downsample_blur_pass->DescriptorSets[1][frame];
+            auto& dst_image_set = m_downsample_blur_pass->DescriptorSets[2][frame];
+
+            sampler_descriptor_write.dstSet                 = sampler_set;
+            source_image_array_descriptor_write.dstSet      = src_image_set;
+            destination_image_array_descriptor_write.dstSet = dst_image_set;
+
+            m_device_context.Device.updateDescriptorSets(sampler_descriptor_write, {});
+            m_device_context.Device.updateDescriptorSets(source_image_array_descriptor_write, {});
+            m_device_context.Device.updateDescriptorSets(destination_image_array_descriptor_write, {});
+        }
+
+        // Same layout, same descriptor sets, just copy cheekily
+        m_upsample_blur_pass->DescriptorSets = m_downsample_blur_pass->DescriptorSets;
     }
 
     void Renderer::particle_compute_pass() {

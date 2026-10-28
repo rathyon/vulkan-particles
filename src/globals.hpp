@@ -36,7 +36,7 @@ namespace vkdemo::globals {
     static constexpr float kMinAngularSpeed = 0.2f;
     static constexpr float kMaxAngularSpeed = 6.0f;
 
-    static constexpr uint8_t kKawaseDualBlurLevelCount = 3;
+    static constexpr uint8_t kDualKawaseBlurLevelCount = 3;
 
 } // namespace vkdemo::globals
 

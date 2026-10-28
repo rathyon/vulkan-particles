@@ -15,14 +15,16 @@ namespace vkdemo {
     public:
         RenderPass(vk::Device device) : m_device(device) {}
         ~RenderPass() {
-            m_device.destroyDescriptorSetLayout(DescriptorSetLayout);
+            for (auto &descriptor_set_layout: DescriptorSetLayouts) {
+                m_device.destroyDescriptorSetLayout(descriptor_set_layout);
+            }
             m_device.destroyPipelineLayout(PipelineLayout);
             m_device.destroyPipeline(Pipeline);
         }
 
         vk::Pipeline                             Pipeline{};
         vk::PipelineLayout                       PipelineLayout{};
-        vk::DescriptorSetLayout                  DescriptorSetLayout{};
+        std::vector<vk::DescriptorSetLayout>     DescriptorSetLayouts{};
         std::vector<Buffered<vk::DescriptorSet>> DescriptorSets{};
 
     private:
@@ -64,10 +66,10 @@ namespace vkdemo {
         void create_buffers();
         void create_images();
 
-        void update_descriptor_sets();
-        void update_particle_compute_descriptor_sets();
-        void update_particle_draw_descriptor_sets();
-        void update_blur_descriptor_sets();
+        void create_descriptor_sets();
+        void create_particle_compute_descriptor_sets();
+        void create_particle_draw_descriptor_sets();
+        void create_blur_descriptor_sets();
 
         void particle_compute_pass();
         void particle_draw_pass();
@@ -82,14 +84,24 @@ namespace vkdemo {
 
         vk::DescriptorPool m_descriptor_pool{};
 
-        std::unique_ptr<RenderPass> m_compute_pass{};
-        std::unique_ptr<RenderPass> m_particle_draw_pass{};
-        std::unique_ptr<RenderPass> m_downsample_blur_pass{};
-        std::unique_ptr<RenderPass> m_upsample_blur_pass{};
-
+        std::unique_ptr<RenderPass>                 m_compute_pass{};
+        std::unique_ptr<RenderPass>                 m_particle_draw_pass{};
+        std::unique_ptr<RenderPass>                 m_downsample_blur_pass{};
+        std::unique_ptr<RenderPass>                 m_upsample_blur_pass{};
         Buffered<std::unique_ptr<RenderAttachment>> m_main_color_attachments{};
-        Buffered<std::unique_ptr<Buffer>> m_particle_storage_buffers{};
-        Buffered<std::unique_ptr<Buffer>> m_world_uniform_buffers{};
+        Buffered<std::unique_ptr<Buffer>>           m_particle_storage_buffers{};
+        Buffered<std::unique_ptr<Buffer>>           m_world_uniform_buffers{};
+        vk::Sampler                                 m_sampler{};
+        vk::DescriptorImageInfo                     m_sampler_descriptor{};
+
+        // The main color attachment is used in the first and last pass of the dual kawase blur, so two image allocations can be saved (e.g allocate 5 instead of 7)
+        static constexpr uint8_t kBlurStepAttachmentCount = globals::kDualKawaseBlurLevelCount * 2 - 1;
+        static_assert(kBlurStepAttachmentCount % 2 == 1); // guarantee odd count of blur step attachments
+
+        std::array<std::unique_ptr<RenderAttachment>, kBlurStepAttachmentCount> m_blur_step_attachments{};
+
+        static constexpr uint8_t kImageDescriptorCount = globals::kFramesInFlight + kBlurStepAttachmentCount;
+
 
         std::vector<DebrisParticle> m_starting_particle_states{globals::kParticleCount};
         World                       m_world_data{};

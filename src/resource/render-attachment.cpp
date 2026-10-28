@@ -1,12 +1,11 @@
 #include "render-attachment.hpp"
 
 #include "device-context.hpp"
-#include "globals.hpp"
 #include "util.hpp"
 
 namespace vkdemo {
 
-    RenderAttachment::RenderAttachment(const DeviceContext &context, const RenderAttachmentType type) : SampledImage(context) {
+    RenderAttachment::RenderAttachment(const DeviceContext &context, const RenderAttachmentType type, const vk::Extent3D extent) : SampledImage(context), m_extent(extent) {
         Format = type == RenderAttachmentType::Color ? globals::kColorAttachmentFormat : globals::kDepthStencilAttachmentFormat;
         Aspect = type == RenderAttachmentType::Color ? vk::ImageAspectFlagBits::eColor : vk::ImageAspectFlagBits::eDepth;
 
@@ -26,7 +25,7 @@ namespace vkdemo {
 
         color_create_info.imageType   = vk::ImageType::e2D;
         color_create_info.format      = Format;
-        color_create_info.extent      = globals::kRenderExtent3D;
+        color_create_info.extent      = m_extent;
         color_create_info.mipLevels   = 1;
         color_create_info.arrayLayers = 1;
         color_create_info.samples     = vk::SampleCountFlagBits::e1;
