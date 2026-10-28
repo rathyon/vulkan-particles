@@ -55,6 +55,13 @@ namespace vkdemo {
             uint32_t ParticleCount{globals::kParticleCount};
         };
 
+        struct BlurData {
+            glm::vec2 DestinationImageSize;
+            uint32_t  SourceImageIndex;
+            uint32_t  DestinationImageIndex;
+            float     SampleDistance;
+        };
+
         void create_shader_passes();
         void create_compute_pass();
         void create_particle_draw_pass();
@@ -91,6 +98,7 @@ namespace vkdemo {
         Buffered<std::unique_ptr<RenderAttachment>> m_main_color_attachments{};
         Buffered<std::unique_ptr<Buffer>>           m_particle_storage_buffers{};
         Buffered<std::unique_ptr<Buffer>>           m_world_uniform_buffers{};
+        Buffered<std::unique_ptr<Buffer>>           m_blur_data_buffers{};
         vk::Sampler                                 m_sampler{};
         vk::DescriptorImageInfo                     m_sampler_descriptor{};
 
@@ -102,6 +110,8 @@ namespace vkdemo {
 
         static constexpr uint8_t kImageDescriptorCount = globals::kFramesInFlight + kBlurStepAttachmentCount;
 
+        BlurData                                         m_blur_data{};
+        std::unordered_map<RenderAttachment *, uint32_t> m_attachment_to_bindless_index_map{};
 
         std::vector<DebrisParticle> m_starting_particle_states{globals::kParticleCount};
         World                       m_world_data{};

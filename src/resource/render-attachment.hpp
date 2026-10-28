@@ -17,8 +17,7 @@ namespace vkdemo {
         RenderAttachment &operator=(const RenderAttachment &)  = delete;
         RenderAttachment &operator=(const RenderAttachment &&) = delete;
 
-    private:
-        const vk::Extent3D m_extent;
+        const vk::Extent3D Extent;
     };
 
 } // namespace vkdemo

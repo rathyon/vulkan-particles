@@ -5,7 +5,7 @@
 
 namespace vkdemo {
 
-    RenderAttachment::RenderAttachment(const DeviceContext &context, const RenderAttachmentType type, const vk::Extent3D extent) : SampledImage(context), m_extent(extent) {
+    RenderAttachment::RenderAttachment(const DeviceContext &context, const RenderAttachmentType type, const vk::Extent3D extent) : SampledImage(context), Extent(extent) {
         Format = type == RenderAttachmentType::Color ? globals::kColorAttachmentFormat : globals::kDepthStencilAttachmentFormat;
         Aspect = type == RenderAttachmentType::Color ? vk::ImageAspectFlagBits::eColor : vk::ImageAspectFlagBits::eDepth;
 
@@ -25,7 +25,7 @@ namespace vkdemo {
 
         color_create_info.imageType   = vk::ImageType::e2D;
         color_create_info.format      = Format;
-        color_create_info.extent      = m_extent;
+        color_create_info.extent      = Extent;
         color_create_info.mipLevels   = 1;
         color_create_info.arrayLayers = 1;
         color_create_info.samples     = vk::SampleCountFlagBits::e1;

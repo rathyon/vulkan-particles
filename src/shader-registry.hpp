@@ -53,8 +53,8 @@ namespace vkdemo {
         static constexpr std::string_view kShaderFolder{"shader"};
 
         /// @brief Holds all of the expected shader files by the application
-        const std::vector<std::string> kShaderFilenames{"particle-compute.slang", "particle-draw.slang", "postprocess.slang", "particle-compute.comp",
-                                                        "particle-draw.vert",     "particle-draw.frag",  "dual-kawase-blur-down.comp",  "dual-kawase-blur-up.comp"};
+        const std::vector<std::string> kShaderFilenames{"particle-compute.slang", "particle-draw.slang", "postprocess.slang",
+            "particle-compute.comp", "particle-draw.vert",     "particle-draw.frag",  "dual-kawase-blur-down.vert",  "dual-kawase-blur-down.frag"};
 
 
         /// @brief Loads a GLSL shader, given its file path.
