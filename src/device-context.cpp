@@ -240,12 +240,12 @@ namespace vkdemo {
         // Required due to lack of Slang support for writing PointSize
         vk::PhysicalDeviceMaintenance5Features maintenance5_features{};
         maintenance5_features.maintenance5 = true;
-        maintenance5_features.pNext = &relaxed_extended_instruction_features;
+        maintenance5_features.pNext        = &relaxed_extended_instruction_features;
 
         // Enable desired vulkan features
         vk::PhysicalDeviceHostImageCopyFeatures host_image_copy_features{};
         host_image_copy_features.hostImageCopy = true;
-        host_image_copy_features.pNext = &maintenance5_features;
+        host_image_copy_features.pNext         = &maintenance5_features;
 
         vk::PhysicalDeviceVulkan13Features enabled_vk13_features{};
         enabled_vk13_features.synchronization2 = true;
@@ -253,17 +253,18 @@ namespace vkdemo {
         enabled_vk13_features.pNext            = &host_image_copy_features;
 
         vk::PhysicalDeviceVulkan12Features enabled_vk12_features{};
+        enabled_vk12_features.descriptorBindingPartiallyBound           = true;
         enabled_vk12_features.descriptorIndexing                        = true;
+        enabled_vk12_features.descriptorBindingVariableDescriptorCount  = true;
         enabled_vk12_features.shaderSampledImageArrayNonUniformIndexing = true;
         enabled_vk12_features.runtimeDescriptorArray                    = true;
-        enabled_vk12_features.descriptorBindingVariableDescriptorCount  = true;
         enabled_vk12_features.bufferDeviceAddress                       = true;
         enabled_vk12_features.scalarBlockLayout                         = true;
         enabled_vk12_features.pNext                                     = &enabled_vk13_features;
 
         vk::PhysicalDeviceFeatures2 enabled_features{};
         enabled_features.features.samplerAnisotropy = true;
-        enabled_features.features.fillModeNonSolid = true;
+        enabled_features.features.fillModeNonSolid  = true;
         enabled_features.pNext                      = &enabled_vk12_features;
 
         vk::DeviceCreateInfo device_create_info{};

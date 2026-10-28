@@ -1,9 +1,9 @@
 #version 450
 
-layout (location = 0) out vec2 outUV;
+layout(set = 0, binding = 0) uniform texture2D SourceImage;
+layout(set = 0, binding = 1) uniform sampler Sampler;
+layout(set = 0, binding = 2) uniform writeonly image2D DestinationImage;
 
-void main()
-{
-    outUV = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-    gl_Position = vec4(outUV * 2.0f + -1.0f, 0.0f, 1.0f);
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+void main() {
 }

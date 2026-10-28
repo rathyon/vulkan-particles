@@ -7,7 +7,14 @@
 
 namespace vkdemo {
 
-    Renderer::~Renderer() { m_device_context.Device.destroyDescriptorPool(m_descriptor_pool); }
+    Renderer::~Renderer() {
+        m_device_context.Device.destroyDescriptorPool(m_descriptor_pool);
+
+        // Let unique_ptr dispose these (out of scope destruction)
+        for (auto &attachment: m_main_color_attachments) {
+            attachment = nullptr;
+        }
+    }
 
     void Renderer::Initialize(const Window &window) {
         m_device_context.Initialize();
@@ -35,7 +42,7 @@ namespace vkdemo {
         while (!stop) {
             m_frame_context = m_context->BeginFrame();
 
-            // Update world buffer
+            // Update world data buffer
             current_time           = SDL_GetTicks();
             m_world_data.Time      = static_cast<float>(current_time) / 1000.0f;
             m_world_data.TimeDelta = static_cast<float>(current_time - last_time) / 1000.0f;
@@ -46,10 +53,10 @@ namespace vkdemo {
             memcpy(m_world_uniform_buffers[m_frame_context->Index]->AllocationInfo.pMappedData, &m_world_data, sizeof(World));
 
             // temporary camera orbit
-            static constexpr float kOrbitRadius = 3.0f;
-            static constexpr float kOrbitSpeed  = 0.5f;
-
+            // static constexpr float kOrbitRadius = 3.0f;
+            // static constexpr float kOrbitSpeed  = 0.5f;
             // m_camera->SetTranslation({glm::sin(m_world_data.Time * kOrbitSpeed) * kOrbitRadius, 2.5f, glm::cos(m_world_data.Time * kOrbitSpeed) * kOrbitRadius});
+
             m_camera->Update(m_frame_context);
 
             m_context->BeginComputeCommands();
@@ -58,10 +65,10 @@ namespace vkdemo {
 
             m_context->BeginGraphicsCommands();
             particle_draw_pass();
-            postprocess_pass();
-            // todo DrawUI here
+            blur_pass();
+            // draw UI here
+            m_context->CopyColorAttachmentToSwapchain(*m_main_color_attachments[m_frame_context->Index]);
             m_context->EndGraphicsCommands();
-
             m_context->EndFrame();
 
             for (SDL_Event event; SDL_PollEvent(&event);) {
@@ -79,7 +86,7 @@ namespace vkdemo {
     void Renderer::create_shader_passes() {
         create_compute_pass();
         create_particle_draw_pass();
-        create_postprocess_pass();
+        create_blur_passes();
         update_descriptor_sets();
     }
 
@@ -107,7 +114,7 @@ namespace vkdemo {
         check(m_compute_pass->PipelineLayout != nullptr);
 
         GlslShaderModule                 *shader_module = m_shader_registry->GetGlslModule("particle-compute.comp");
-        vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, shader_module->Module, "main"};
+        vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, shader_module->Module, globals::kGlslEntryFunctionName.data()};
 
         vk::ComputePipelineCreateInfo pipeline_ci{};
         pipeline_ci.layout = m_compute_pass->PipelineLayout;
@@ -195,73 +202,47 @@ namespace vkdemo {
         m_particle_draw_pass->Pipeline = result.value;
     }
 
-    void Renderer::create_postprocess_pass() {
-        m_postprocess_pass = std::make_unique<RenderPass>(m_device_context.Device);
+    void Renderer::create_blur_passes() {
+        m_downsample_blur_pass = std::make_unique<RenderPass>(m_device_context.Device);
+        m_upsample_blur_pass = std::make_unique<RenderPass>(m_device_context.Device);
 
-        std::vector set_layout_bindings{// Binding 0: input image
-                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eFragment},
-                                        // Binding 1: sampler
-                                        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}};
+        std::vector set_layout_bindings{// Binding 0: source image
+                                        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eSampledImage, 1, vk::ShaderStageFlagBits::eCompute},
+                                        // Binding 1: source image sampler
+                                        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eCompute},
+                                        // Binding 2: destination image
+                                        vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eCompute}};
 
         vk::DescriptorSetLayoutCreateInfo descriptor_layout{{}, set_layout_bindings};
-        m_postprocess_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        m_downsample_blur_pass->DescriptorSetLayout = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+        m_upsample_blur_pass->DescriptorSetLayout   = m_device_context.Device.createDescriptorSetLayout(descriptor_layout);
+
         vk::PipelineLayoutCreateInfo pipeline_layout_ci{};
-        pipeline_layout_ci.setSetLayouts(m_postprocess_pass->DescriptorSetLayout);
-        m_postprocess_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
-        check(m_postprocess_pass->PipelineLayout != nullptr);
+        pipeline_layout_ci.setSetLayouts(m_downsample_blur_pass->DescriptorSetLayout);
+        m_downsample_blur_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
+        check(m_downsample_blur_pass->PipelineLayout != nullptr);
 
-        GlslShaderModule *vert_module = m_shader_registry->GetGlslModule("dual-kawase-blur-down.comp");
-        GlslShaderModule *frag_module = m_shader_registry->GetGlslModule("dual-kawase-blur-up.comp");
+        pipeline_layout_ci.setSetLayouts(m_upsample_blur_pass->DescriptorSetLayout);
+        m_upsample_blur_pass->PipelineLayout = m_device_context.Device.createPipelineLayout(pipeline_layout_ci);
+        check(m_upsample_blur_pass->PipelineLayout != nullptr);
 
-        std::vector shader_stages{vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, vert_module->Module, globals::kGlslEntryFunctionName.data()},
-                                  vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, frag_module->Module, globals::kGlslEntryFunctionName.data()}};
+        GlslShaderModule                 *downsample_module = m_shader_registry->GetGlslModule("dual-kawase-blur-down.comp");
+        vk::PipelineShaderStageCreateInfo shader_stage_ci{{}, vk::ShaderStageFlagBits::eCompute, downsample_module->Module, globals::kGlslEntryFunctionName.data()};
+        vk::ComputePipelineCreateInfo     pipeline_ci{};
+        pipeline_ci.layout = m_downsample_blur_pass->PipelineLayout;
+        pipeline_ci.stage  = shader_stage_ci;
 
-        vk::PipelineInputAssemblyStateCreateInfo input_assembly_state{{}, vk::PrimitiveTopology::eTriangleList, false};
-        vk::PipelineViewportStateCreateInfo      viewport_state{{}, 1, {}, 1, {}};
+        auto result = m_device_context.Device.createComputePipeline(nullptr, pipeline_ci);
+        check(result.result == vk::Result::eSuccess, "Failed to create compute pipeline!");
+        m_downsample_blur_pass->Pipeline = result.value;
 
-        // Culling and FrontFace are setup specifically for the geometry-less "fake fullscreen quad" technique
-        vk::PipelineRasterizationStateCreateInfo rasterization_state{{}, false, false, vk::PolygonMode::eFill, vk::CullModeFlagBits::eFront, vk::FrontFace::eCounterClockwise, false, {}, {}, {}, 1.0f};
-        vk::PipelineMultisampleStateCreateInfo   multisample_state{{}, vk::SampleCountFlagBits::e1};
-        vk::PipelineColorBlendAttachmentState    color_blend_attachment_state{};
-        color_blend_attachment_state.blendEnable         = true;
-        color_blend_attachment_state.srcColorBlendFactor = vk::BlendFactor::eOne;
-        color_blend_attachment_state.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-        color_blend_attachment_state.colorBlendOp        = vk::BlendOp::eAdd;
-        color_blend_attachment_state.srcAlphaBlendFactor = vk::BlendFactor::eOne;
-        color_blend_attachment_state.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-        color_blend_attachment_state.alphaBlendOp        = vk::BlendOp::eAdd;
-        color_blend_attachment_state.alphaBlendOp        = vk::BlendOp::eAdd;
-        color_blend_attachment_state.colorWriteMask      = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+        GlslShaderModule *upsample_module = m_shader_registry->GetGlslModule("dual-kawase-blur-up.comp");
+        shader_stage_ci.module            = upsample_module->Module;
+        pipeline_ci.layout                = m_upsample_blur_pass->PipelineLayout;
 
-        vk::PipelineColorBlendStateCreateInfo color_blend_state{{}, false, {}, 1, &color_blend_attachment_state};
-
-        vk::PipelineDepthStencilStateCreateInfo depth_stencil_state{{}, false, false, vk::CompareOp::eAlways, false, false};
-
-        std::vector<vk::DynamicState>      dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-        vk::PipelineDynamicStateCreateInfo dynamic_state(vk::PipelineDynamicStateCreateFlags(), dynamic_states);
-
-        // Fullscreen shader is "geometry-less"
-        vk::PipelineVertexInputStateCreateInfo vertex_input_ci{};
-
-        vk::GraphicsPipelineCreateInfo pipeline_ci{};
-        pipeline_ci.setStages(shader_stages);
-        pipeline_ci.pVertexInputState   = &vertex_input_ci;
-        pipeline_ci.pInputAssemblyState = &input_assembly_state;
-        pipeline_ci.pViewportState      = &viewport_state;
-        pipeline_ci.pRasterizationState = &rasterization_state;
-        pipeline_ci.pMultisampleState   = &multisample_state;
-        pipeline_ci.pDepthStencilState  = &depth_stencil_state;
-        pipeline_ci.pColorBlendState    = &color_blend_state;
-        pipeline_ci.pDynamicState       = &dynamic_state;
-        pipeline_ci.layout              = m_postprocess_pass->PipelineLayout;
-
-        vk::PipelineRenderingCreateInfo pipeline_rendering_create_info{{}, globals::kColorAttachmentFormat, globals::kDepthStencilAttachmentFormat};
-        pipeline_ci.pNext = &pipeline_rendering_create_info;
-
-        const auto result = m_device_context.Device.createGraphicsPipeline(nullptr, pipeline_ci);
-        check(result.result == vk::Result::eSuccess, "Failed to create graphics pipeline!");
-
-        m_postprocess_pass->Pipeline = result.value;
+        result = m_device_context.Device.createComputePipeline(nullptr, pipeline_ci);
+        check(result.result == vk::Result::eSuccess, "Failed to create compute pipeline!");
+        m_upsample_blur_pass->Pipeline = result.value;
     }
 
     void Renderer::prepare_resources() {
@@ -332,13 +313,15 @@ namespace vkdemo {
 
     void Renderer::create_descriptor_pool() {
         std::vector<vk::DescriptorPoolSize> pool_sizes = {// Last frame particle buffer + current frame particle buffer
-                                                          vk::DescriptorPoolSize{vk::DescriptorType::eStorageBuffer, 2 * globals::kFramesInFlight},
-                                                          // Compute uniform buffer + Camera uniform buffer
-                                                          vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2 * globals::kFramesInFlight},
-                                                          // Sampled color attachment for post processing
-                                                          vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage, globals::kFramesInFlight},
+                                                          {vk::DescriptorType::eStorageBuffer, 2 * globals::kFramesInFlight},
+                                                          // World data uniform buffer + Camera uniform buffer
+                                                          {vk::DescriptorType::eUniformBuffer, 2 * globals::kFramesInFlight},
+                                                          // Source image for post processing
+                                                          {vk::DescriptorType::eSampledImage, (globals::kKawaseDualBlurLevelCount * 2) * globals::kFramesInFlight},
+                                                          // Destination image for post processing
+                                                          {vk::DescriptorType::eStorageImage, (globals::kKawaseDualBlurLevelCount * 2) * globals::kFramesInFlight},
                                                           // Samplers
-                                                          vk::DescriptorPoolSize{vk::DescriptorType::eSampler, globals::kFramesInFlight}};
+                                                          {vk::DescriptorType::eSampler, globals::kFramesInFlight}};
 
         vk::DescriptorPoolCreateInfo ci{};
         ci.setPoolSizes(pool_sizes);
@@ -388,12 +371,18 @@ namespace vkdemo {
         }
     }
 
-    void Renderer::create_images() { m_post_process_effect_attachment = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color); }
+    void Renderer::create_images() {
+        for (auto &attachment_ptr: m_main_color_attachments) {
+            attachment_ptr = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color);
+        }
+
+        // m_post_process_effect_attachment = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color);
+    }
 
     void Renderer::update_descriptor_sets() {
         update_particle_compute_descriptor_sets();
         update_particle_draw_descriptor_sets();
-        update_postprocess_descriptor_sets();
+        update_blur_descriptor_sets();
     }
 
     void Renderer::update_particle_compute_descriptor_sets() {
@@ -432,22 +421,41 @@ namespace vkdemo {
         }
     }
 
-    void Renderer::update_postprocess_descriptor_sets() {
-        m_postprocess_pass->DescriptorSets.resize(1);
-
-        for (auto &descriptor_set: m_postprocess_pass->DescriptorSets[0]) {
-            vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_postprocess_pass->DescriptorSetLayout}};
-            check(m_device_context.Device.allocateDescriptorSets(&alloc_info, &descriptor_set));
-
-            // Copy the descriptor and apply the correct image layout to expect
-            vk::DescriptorImageInfo expected_descriptor = m_post_process_effect_attachment->Descriptor;
-            expected_descriptor.imageLayout             = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-            std::vector write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, expected_descriptor},
-                                                 vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, expected_descriptor}};
-
-            m_device_context.Device.updateDescriptorSets(write_descriptor_sets, {});
-        }
+    void Renderer::update_blur_descriptor_sets() {
+        // TODO use bindless
+        // m_downsample_blur_pass->DescriptorSets.resize(1);
+        //
+        // for (auto &descriptor_set: m_downsample_blur_pass->DescriptorSets[0]) {
+        //     vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_downsample_blur_pass->DescriptorSetLayout}};
+        //     check(m_device_context.Device.allocateDescriptorSets(&alloc_info, &descriptor_set));
+        //
+        //     // Copy the descriptor and apply the correct image layout to expect
+        //     // vk::DescriptorImageInfo expected_descriptor = m_post_process_effect_attachment->Descriptor; // TODO
+        //     expected_descriptor.imageLayout             = vk::ImageLayout::eShaderReadOnlyOptimal;
+        //
+        //     std::vector write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, vk::ImageLayout::eShaderReadOnlyOptimal},
+        //                                          vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, expected_descriptor},
+        //                                          vk::WriteDescriptorSet{descriptor_set, 2, 0, vk::DescriptorType::eStorageImage, expected_descriptor}};
+        //
+        //     m_device_context.Device.updateDescriptorSets(write_descriptor_sets, {});
+        // }
+        //
+        // m_upsample_blur_pass->DescriptorSets.resize(1);
+        //
+        // for (auto &descriptor_set: m_upsample_blur_pass->DescriptorSets[0]) {
+        //     vk::DescriptorSetAllocateInfo alloc_info{m_descriptor_pool, {m_upsample_blur_pass->DescriptorSetLayout}};
+        //     check(m_device_context.Device.allocateDescriptorSets(&alloc_info, &descriptor_set));
+        //
+        //     // Copy the descriptor and apply the correct image layout to expect
+        //     // vk::DescriptorImageInfo expected_descriptor = m_post_process_effect_attachment->Descriptor; // TODO
+        //     expected_descriptor.imageLayout             = vk::ImageLayout::eShaderReadOnlyOptimal;
+        //
+        //     std::vector write_descriptor_sets = {vk::WriteDescriptorSet{descriptor_set, 0, 0, vk::DescriptorType::eSampledImage, expected_descriptor},
+        //                                          vk::WriteDescriptorSet{descriptor_set, 1, 0, vk::DescriptorType::eSampler, expected_descriptor},
+        //                                          vk::WriteDescriptorSet{descriptor_set, 2, 0, vk::DescriptorType::eStorageImage, expected_descriptor}};
+        //
+        //     m_device_context.Device.updateDescriptorSets(write_descriptor_sets, {});
+        // }
     }
 
     void Renderer::particle_compute_pass() {
@@ -515,7 +523,7 @@ namespace vkdemo {
         cb.setViewport(0, {viewport});
         cb.setScissor(0, {scissor});
 
-        auto &color_attachment = *m_post_process_effect_attachment;
+        auto &color_attachment = *m_main_color_attachments[m_frame_context->Index];
         color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
 
         vk::RenderingAttachmentInfo color_attachment_info{};
@@ -553,37 +561,37 @@ namespace vkdemo {
         }
     }
 
-    void Renderer::postprocess_pass() {
-        const auto &cb = m_frame_context->GraphicsCB;
-
-        m_post_process_effect_attachment->LayoutTransition(cb, vk::ImageLayout::eShaderReadOnlyOptimal);
-
-        vk::Viewport viewport{{}, {}, globals::kRenderExtent2D.width, globals::kRenderExtent3D.height, 0, 1};
-        vk::Rect2D   scissor{{}, globals::kRenderExtent2D};
-        cb.setViewport(0, {viewport});
-        cb.setScissor(0, {scissor});
-
-        auto &color_attachment = *m_context->MainColorAttachments[m_frame_context->Index];
-        color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
-
-        vk::RenderingAttachmentInfo color_attachment_info{};
-        color_attachment_info.imageView        = color_attachment.Descriptor.imageView;
-        color_attachment_info.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
-        color_attachment_info.loadOp           = vk::AttachmentLoadOp::eClear;
-        color_attachment_info.clearValue.color = vk::ClearColorValue{0, 0, 0, 0};
-        color_attachment_info.storeOp          = vk::AttachmentStoreOp::eStore;
-
-        vk::RenderingInfo rendering_info{};
-        rendering_info.renderArea.extent = globals::kRenderExtent2D;
-        rendering_info.layerCount        = 1;
-        rendering_info.setColorAttachments({color_attachment_info});
-
-        cb.beginRendering(rendering_info);
-
-        cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_postprocess_pass->Pipeline);
-        cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_postprocess_pass->PipelineLayout, 0, {m_postprocess_pass->DescriptorSets[0][m_frame_context->Index]}, {});
-        cb.draw(3, 1, 0, 0);
-        cb.endRendering();
+    void Renderer::blur_pass() {
+        // const auto &cb = m_frame_context->GraphicsCB;
+        //
+        // m_post_process_effect_attachment->LayoutTransition(cb, vk::ImageLayout::eShaderReadOnlyOptimal);
+        //
+        // vk::Viewport viewport{{}, {}, globals::kRenderExtent2D.width, globals::kRenderExtent3D.height, 0, 1};
+        // vk::Rect2D   scissor{{}, globals::kRenderExtent2D};
+        // cb.setViewport(0, {viewport});
+        // cb.setScissor(0, {scissor});
+        //
+        // auto &color_attachment = *m_context->MainColorAttachments[m_frame_context->Index];
+        // color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
+        //
+        // vk::RenderingAttachmentInfo color_attachment_info{};
+        // color_attachment_info.imageView        = color_attachment.Descriptor.imageView;
+        // color_attachment_info.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
+        // color_attachment_info.loadOp           = vk::AttachmentLoadOp::eClear;
+        // color_attachment_info.clearValue.color = vk::ClearColorValue{0, 0, 0, 0};
+        // color_attachment_info.storeOp          = vk::AttachmentStoreOp::eStore;
+        //
+        // vk::RenderingInfo rendering_info{};
+        // rendering_info.renderArea.extent = globals::kRenderExtent2D;
+        // rendering_info.layerCount        = 1;
+        // rendering_info.setColorAttachments({color_attachment_info});
+        //
+        // cb.beginRendering(rendering_info);
+        //
+        // cb.bindPipeline(vk::PipelineBindPoint::eGraphics, m_downsample_blur_pass->Pipeline);
+        // cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_downsample_blur_pass->PipelineLayout, 0, {m_downsample_blur_pass->DescriptorSets[0][m_frame_context->Index]}, {});
+        // cb.draw(3, 1, 0, 0);
+        // cb.endRendering();
     }
 
 } // namespace vkdemo

@@ -31,10 +31,12 @@ namespace vkdemo::globals {
     static constexpr uint32_t kParticleCount = 1 << 12;
     static constexpr uint32_t kRNGSeed       = 7; // Lucky seven :)
 
-    static constexpr float kMinOrbitRadius = 2.4f;
-    static constexpr float kMaxOrbitRadius = 2.5f;
+    static constexpr float kMinOrbitRadius  = 2.4f;
+    static constexpr float kMaxOrbitRadius  = 2.5f;
     static constexpr float kMinAngularSpeed = 0.2f;
     static constexpr float kMaxAngularSpeed = 6.0f;
+
+    static constexpr uint8_t kKawaseDualBlurLevelCount = 3;
 
 } // namespace vkdemo::globals
 

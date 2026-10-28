@@ -28,6 +28,7 @@ namespace vkdemo {
         [[nodiscard]] FrameContext     *BeginFrame();
         void                            BeginGraphicsCommands();
         void                            BeginComputeCommands();
+        void                            CopyColorAttachmentToSwapchain(RenderAttachment &color_attachment);
         [[nodiscard]] vk::CommandBuffer CreateCommandBuffer(bool begin_recording, QueueType queue);
         void                            EndFrame();
         void                            EndGraphicsCommands();
@@ -38,15 +39,13 @@ namespace vkdemo {
         /// @note The command buffer is also destroyed
         void FlushCommandBuffer(vk::CommandBuffer cb, QueueType queue) const;
 
-        Buffered<std::unique_ptr<RenderAttachment>> MainColorAttachments{};
-        std::unique_ptr<RenderAttachment>           DepthStencilAttachment{};
+        std::unique_ptr<RenderAttachment> DepthStencilAttachment{};
 
     private:
         void create_sync_objects();
         void create_command_pools_and_buffers();
         void create_attachments();
         void create_swapchain(const Window &window);
-        void copy_main_color_attachment_to_swapchain(vk::CommandBuffer cb);
 
         const DeviceContext &m_device_context;
         const vk::Device    &m_device;

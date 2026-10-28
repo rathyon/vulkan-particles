@@ -56,7 +56,7 @@ namespace vkdemo {
         void create_shader_passes();
         void create_compute_pass();
         void create_particle_draw_pass();
-        void create_postprocess_pass();
+        void create_blur_passes();
 
         void prepare_resources();
         void prepare_starting_conditions();
@@ -67,11 +67,11 @@ namespace vkdemo {
         void update_descriptor_sets();
         void update_particle_compute_descriptor_sets();
         void update_particle_draw_descriptor_sets();
-        void update_postprocess_descriptor_sets();
+        void update_blur_descriptor_sets();
 
         void particle_compute_pass();
         void particle_draw_pass();
-        void postprocess_pass();
+        void blur_pass();
 
         DeviceContext                    m_device_context{};
         const Window                    *m_window;
@@ -84,9 +84,10 @@ namespace vkdemo {
 
         std::unique_ptr<RenderPass> m_compute_pass{};
         std::unique_ptr<RenderPass> m_particle_draw_pass{};
-        std::unique_ptr<RenderPass> m_postprocess_pass{};
+        std::unique_ptr<RenderPass> m_downsample_blur_pass{};
+        std::unique_ptr<RenderPass> m_upsample_blur_pass{};
 
-        std::unique_ptr<RenderAttachment> m_post_process_effect_attachment{};
+        Buffered<std::unique_ptr<RenderAttachment>> m_main_color_attachments{};
         Buffered<std::unique_ptr<Buffer>> m_particle_storage_buffers{};
         Buffered<std::unique_ptr<Buffer>> m_world_uniform_buffers{};
 

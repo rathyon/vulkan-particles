@@ -17,9 +17,6 @@ namespace vkdemo {
 
         // Let unique_ptr dispose these (out of scope destruction)
         DepthStencilAttachment = nullptr;
-        for (auto &attachment: MainColorAttachments) {
-            attachment = nullptr;
-        }
 
         for (auto m_command_pool: m_command_pools) {
             m_device.destroyCommandPool(m_command_pool);
@@ -75,6 +72,39 @@ namespace vkdemo {
         cb.begin(vk::CommandBufferBeginInfo{});
     }
 
+    void RendererContext::CopyColorAttachmentToSwapchain(RenderAttachment &color_attachment) {
+        // Copy contents from a color attachment to a swapchain image.
+        // Because the swapchain image may be of a different format or resolution, blit is used to resolve these differences.
+        auto &cb              = m_frame_contexts[m_frame_index].GraphicsCB;
+        auto &swapchain_image = *m_swapchain->Images[m_swapchain_image_index];
+
+        color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
+        swapchain_image.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
+
+        // Define the regions to blit (we will blit the whole swapchain image)
+        const vk::Offset3D src_start{0, 0, 0};
+        const vk::Offset3D src_end{globals::kRenderExtent2D.width, globals::kRenderExtent2D.height, 1};
+
+        const vk::Offset3D dst_start{0, 0, 0};
+        const vk::Offset3D dst_end{globals::kWindowSize.x, globals::kWindowSize.y, 1};
+
+        vk::BlitImageInfo2 blit_info{};
+        blit_info.srcImage       = color_attachment.Handle;
+        blit_info.srcImageLayout = vk::ImageLayout::eTransferSrcOptimal;
+        blit_info.dstImage       = swapchain_image.Handle;
+        blit_info.dstImageLayout = vk::ImageLayout::eTransferDstOptimal;
+        blit_info.filter         = vk::Filter::eNearest;
+
+        constexpr vk::ImageSubresourceLayers subresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
+        vk::ImageBlit2                       blit{subresource, {src_start, src_end}, subresource, {dst_start, dst_end}};
+        blit_info.setRegions(blit);
+
+        cb.blitImage2(blit_info);
+
+        color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
+        swapchain_image.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
+    }
+
     vk::CommandBuffer RendererContext::CreateCommandBuffer(const bool begin_recording, const QueueType queue) {
         assert(queue != QueueType::Present && "Cannot use Present queue for commands!");
         vk::CommandBufferAllocateInfo command_buffer_ai{};
@@ -93,11 +123,8 @@ namespace vkdemo {
     void RendererContext::EndFrame() { m_frame_index = (m_frame_index + 1) % globals::kFramesInFlight; }
 
     void RendererContext::EndGraphicsCommands() {
-        // Copy contents from main color attachment to swapchain image.
-        // Because the swapchain image may be of a different format or resolution, blit is used to resolve these differences.
         const auto &frame_context = m_frame_contexts[m_frame_index];
         const auto &cb            = frame_context.GraphicsCB;
-        copy_main_color_attachment_to_swapchain(cb);
 
         // Finish command buffer recording
         cb.end();
@@ -197,9 +224,9 @@ namespace vkdemo {
 
         vk::SemaphoreCreateInfo semaphore_create_info{};
         for (uint8_t i = 0; i < globals::kFramesInFlight; ++i) {
-            m_graphics_fences[i]             = m_device.createFence(fence_create_info);
-            m_compute_fences[i]              = m_device.createFence(fence_create_info);
-            m_image_acquired_semaphores[i]   = m_device.createSemaphore(semaphore_create_info);
+            m_graphics_fences[i]                      = m_device.createFence(fence_create_info);
+            m_compute_fences[i]                       = m_device.createFence(fence_create_info);
+            m_image_acquired_semaphores[i]            = m_device.createSemaphore(semaphore_create_info);
             m_particle_compute_ready_semaphores[i]    = m_device.createSemaphore(semaphore_create_info);
             m_particle_compute_complete_semaphores[i] = m_device.createSemaphore(semaphore_create_info);
 
@@ -216,11 +243,6 @@ namespace vkdemo {
     }
 
     void RendererContext::create_attachments() {
-        // Create color attachments
-        for (auto &attachment_ptr: MainColorAttachments) {
-            attachment_ptr = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::Color);
-        }
-
         // Create depth attachment
         DepthStencilAttachment = std::make_unique<RenderAttachment>(m_device_context, RenderAttachmentType::DepthStencil);
     }
@@ -228,36 +250,5 @@ namespace vkdemo {
     void RendererContext::create_swapchain(const Window &window) {
         check(window.CreateSurface(m_device_context.Instance, m_surface), "Failed to create VkSurfaceKHR from window.");
         m_swapchain = std::make_unique<Swapchain>(m_device_context, m_surface);
-    }
-
-    void RendererContext::copy_main_color_attachment_to_swapchain(vk::CommandBuffer cb) {
-        auto &color_attachment = *MainColorAttachments[m_frame_index];
-        auto &swapchain_image  = *m_swapchain->Images[m_swapchain_image_index];
-
-        color_attachment.LayoutTransition(cb, vk::ImageLayout::eTransferSrcOptimal);
-        swapchain_image.LayoutTransition(cb, vk::ImageLayout::eTransferDstOptimal);
-
-        // Define the regions to blit (we will blit the whole swapchain image)
-        const vk::Offset3D src_start{0, 0, 0};
-        const vk::Offset3D src_end{globals::kRenderExtent2D.width, globals::kRenderExtent2D.height, 1};
-
-        const vk::Offset3D dst_start{0, 0, 0};
-        const vk::Offset3D dst_end{globals::kWindowSize.x, globals::kWindowSize.y, 1};
-
-        vk::BlitImageInfo2 blit_info{};
-        blit_info.srcImage       = color_attachment.Handle;
-        blit_info.srcImageLayout = vk::ImageLayout::eTransferSrcOptimal;
-        blit_info.dstImage       = swapchain_image.Handle;
-        blit_info.dstImageLayout = vk::ImageLayout::eTransferDstOptimal;
-        blit_info.filter         = vk::Filter::eNearest;
-
-        constexpr vk::ImageSubresourceLayers subresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
-        vk::ImageBlit2                       blit{subresource, {src_start, src_end}, subresource, {dst_start, dst_end}};
-        blit_info.setRegions(blit);
-
-        cb.blitImage2(blit_info);
-
-        color_attachment.LayoutTransition(cb, vk::ImageLayout::eColorAttachmentOptimal);
-        swapchain_image.LayoutTransition(cb, vk::ImageLayout::ePresentSrcKHR);
     }
 } // namespace vkdemo

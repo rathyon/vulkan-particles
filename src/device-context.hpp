@@ -40,11 +40,12 @@ namespace vkdemo {
         const std::vector<const char *> kRequiredDeviceExtensions   = {
                 vk::KHRSwapchainExtensionName,
                 vk::EXTMemoryBudgetExtensionName,
-                vk::EXTHostImageCopyExtensionName,        // Required for image copies on the host
-                vk::EXTScalarBlockLayoutExtensionName,    // Required for scalar block layouts (no padding)
-                vk::KHRShaderDrawParametersExtensionName, // Required for using special semantic values in Slang shaders
-                vk::KHRMaintenance5ExtensionName,         // Slang current doesn't allow writing PointSize, so this must be enabled to compensate (still can't write to it!)
+                vk::EXTHostImageCopyExtensionName,                    // Required for image copies on the host
+                vk::EXTScalarBlockLayoutExtensionName,                // Required for scalar block layouts (no padding)
+                vk::KHRShaderDrawParametersExtensionName,             // Required for using special semantic values in Slang shaders
+                vk::KHRMaintenance5ExtensionName,                     // Slang current doesn't allow writing PointSize, so this must be enabled to compensate (still can't write to it!)
                 vk::KHRShaderRelaxedExtendedInstructionExtensionName, // Required for added debug info using forward references to pointers
+                vk::EXTDescriptorIndexingExtensionName,               // Required for descriptor indexing (bindless resources)
         };
 
         void               create_instance();
